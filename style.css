@@ -855,6 +855,12 @@ h6,
   margin: 0;
 }
 
+.book-rating {
+  margin: 0;
+  font-size: 0.84rem;
+  color: color-mix(in srgb, var(--primary) 72%, var(--ink-soft));
+}
+
 .book-price {
   font-weight: 800;
 }
@@ -1187,12 +1193,105 @@ h6,
   font-size: 0.72rem;
 }
 
+.meta-link {
+  text-decoration: none;
+}
+
+.meta-link:hover,
+.meta-link:focus-visible {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 .notice {
   border-radius: 14px;
   border: 1px dashed var(--line-strong);
   background: var(--surface-muted);
   color: var(--ink-soft);
   padding: 0.74rem;
+}
+
+.discovery-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.72rem;
+  align-items: end;
+}
+
+.discovery-grid .actions {
+  margin: 0;
+}
+
+.discovery-grid .field {
+  margin-bottom: 0;
+}
+
+.discovery-grid .actions .btn {
+  width: 100%;
+}
+
+.review-panel {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.72rem;
+}
+
+.review-form {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  padding: 0.85rem;
+}
+
+.review-list {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.review-card {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 0.72rem;
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  margin-bottom: 0.3rem;
+}
+
+.review-rating-pill {
+  border-radius: 999px;
+  border: 1px solid var(--pill-tertiary-border);
+  background: var(--pill-tertiary-bg);
+  color: var(--ink);
+  font-size: 0.78rem;
+  padding: 0.08rem 0.5rem;
+  white-space: nowrap;
+}
+
+.review-time {
+  margin: 0.42rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.panel-divider {
+  border-top: 1px dashed var(--line-strong);
+  margin: 1rem 0 0.85rem;
+}
+
+.cloud-config-form {
+  display: grid;
+  gap: 0.25rem;
 }
 
 .social-links {
@@ -2040,9 +2139,13 @@ body.reduce-motion *::after {
   .theme-toggle-circle {
     flex: 0 0 auto;
   }
+
+  .discovery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1024px) and (min-width: 761px) {
   .container {
     width: min(100% - 1.6rem, var(--max-width));
   }
@@ -2067,6 +2170,10 @@ body.reduce-motion *::after {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .discovery-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .book-detail-layout,
   .book-detail-main,
   .admin-layout {
@@ -2089,6 +2196,10 @@ body.reduce-motion *::after {
     width: 100%;
     display: grid;
     gap: 0.55rem;
+  }
+
+  .discovery-grid {
+    grid-template-columns: 1fr;
   }
 
   .hero-actions .btn,

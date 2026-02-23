@@ -5,7 +5,9 @@ const STORAGE_KEYS = {
   customBooks: "ezone_custom_books_v3",
   theme: "ezone_theme_v1",
   accountPrefs: "ezone_account_prefs_v1",
-  controlCenterLogs: "ezone_control_center_logs_v1"
+  controlCenterLogs: "ezone_control_center_logs_v1",
+  bookReviews: "ezone_book_reviews_v1",
+  cloudConfig: "ezone_cloud_config_v1"
 };
 
 const ADMIN_ACCOUNT = {
@@ -179,6 +181,228 @@ function getCustomBooks() {
 
 function saveCustomBooks(books) {
   writeStorage(STORAGE_KEYS.customBooks, books);
+}
+
+function getBookReviewsMap() {
+  const stored = readStorage(STORAGE_KEYS.bookReviews, {});
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+    return {};
+  }
+
+  const sanitized = {};
+  Object.entries(stored).forEach(([bookId, reviews]) => {
+    if (!Array.isArray(reviews)) {
+      return;
+    }
+
+    sanitized[bookId] = reviews
+      .filter((review) => review && typeof review === "object")
+      .map((review) => {
+        const rating = Math.min(5, Math.max(1, Math.round(Number(review.rating) || 0)));
+        return {
+          id: String(review.id || ""),
+          bookId: String(review.bookId || bookId),
+          userId: String(review.userId || ""),
+          email: normalizeEmail(review.email || ""),
+          name: String(review.name || "Reader"),
+          rating,
+          comment: String(review.comment || "").slice(0, 700),
+          createdAt: String(review.createdAt || ""),
+          updatedAt: String(review.updatedAt || review.createdAt || "")
+        };
+      })
+      .filter((review) => Number.isFinite(review.rating) && review.rating >= 1 && review.rating <= 5);
+  });
+
+  return sanitized;
+}
+
+function saveBookReviewsMap(map) {
+  writeStorage(STORAGE_KEYS.bookReviews, map && typeof map === "object" ? map : {});
+}
+
+function getBookReviews(bookId) {
+  if (!bookId) {
+    return [];
+  }
+
+  const reviewsMap = getBookReviewsMap();
+  const reviews = Array.isArray(reviewsMap[bookId]) ? reviewsMap[bookId] : [];
+  return reviews
+    .slice()
+    .sort((left, right) => {
+      const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+      const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+      return rightTime - leftTime;
+    });
+}
+
+function getBookRatingSummary(bookId) {
+  const reviews = getBookReviews(bookId);
+  if (!reviews.length) {
+    return {
+      average: 0,
+      count: 0
+    };
+  }
+
+  const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+  const average = Math.round((total / reviews.length) * 10) / 10;
+  return {
+    average,
+    count: reviews.length
+  };
+}
+
+function formatBookRatingSummary(bookId) {
+  const summary = getBookRatingSummary(bookId);
+  if (!summary.count) {
+    return "No ratings yet";
+  }
+  const plural = summary.count === 1 ? "review" : "reviews";
+  return `${summary.average.toFixed(1)}/5 (${summary.count} ${plural})`;
+}
+
+function upsertBookReview(bookId, session, rating, comment) {
+  if (!bookId || !session) {
+    return false;
+  }
+
+  const score = Math.min(5, Math.max(1, Math.round(Number(rating) || 0)));
+  if (!score) {
+    return false;
+  }
+
+  const safeComment = String(comment || "").trim().slice(0, 700);
+  const reviewsMap = getBookReviewsMap();
+  const entries = Array.isArray(reviewsMap[bookId]) ? reviewsMap[bookId].slice() : [];
+  const now = new Date().toISOString();
+  const email = normalizeEmail(session.email);
+  const prefs = getAccountPrefs(session.id);
+  const displayName = String(prefs.displayName || session.name || email.split("@")[0] || "Reader").trim();
+
+  const existingIndex = entries.findIndex((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return false;
+    }
+    if (session.id && String(entry.userId || "") === String(session.id)) {
+      return true;
+    }
+    return normalizeEmail(entry.email || "") === email;
+  });
+
+  if (existingIndex >= 0) {
+    const existing = entries[existingIndex];
+    entries[existingIndex] = {
+      ...existing,
+      bookId,
+      userId: session.id || existing.userId || "",
+      email,
+      name: displayName || existing.name || "Reader",
+      rating: score,
+      comment: safeComment,
+      updatedAt: now,
+      createdAt: String(existing.createdAt || now)
+    };
+  } else {
+    entries.push({
+      id: createId("review"),
+      bookId,
+      userId: session.id || "",
+      email,
+      name: displayName || "Reader",
+      rating: score,
+      comment: safeComment,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+
+  reviewsMap[bookId] = entries;
+  saveBookReviewsMap(reviewsMap);
+  return true;
+}
+
+function removeBookReviews(bookId) {
+  if (!bookId) {
+    return;
+  }
+  const reviewsMap = getBookReviewsMap();
+  if (!reviewsMap[bookId]) {
+    return;
+  }
+  delete reviewsMap[bookId];
+  saveBookReviewsMap(reviewsMap);
+}
+
+function getCloudConfig() {
+  const stored = readStorage(STORAGE_KEYS.cloudConfig, {});
+  const source = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+
+  return {
+    provider: "cloudinary",
+    enabled: Boolean(source.enabled),
+    cloudName: String(source.cloudName || "").trim(),
+    uploadPreset: String(source.uploadPreset || "").trim(),
+    folder: String(source.folder || "e-zone").trim()
+  };
+}
+
+function saveCloudConfig(config) {
+  const next = {
+    provider: "cloudinary",
+    enabled: Boolean(config && config.enabled),
+    cloudName: String(config && config.cloudName ? config.cloudName : "").trim(),
+    uploadPreset: String(config && config.uploadPreset ? config.uploadPreset : "").trim(),
+    folder: String(config && config.folder ? config.folder : "e-zone").trim()
+  };
+  writeStorage(STORAGE_KEYS.cloudConfig, next);
+}
+
+function isCloudUploadReady(config) {
+  return Boolean(
+    config
+    && config.enabled
+    && String(config.cloudName || "").trim()
+    && String(config.uploadPreset || "").trim()
+  );
+}
+
+async function uploadPdfToCloudinary(file, config, prefix) {
+  const cloudName = encodeURIComponent(String(config.cloudName || "").trim());
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`;
+  const body = new FormData();
+  body.append("file", file);
+  body.append("upload_preset", String(config.uploadPreset || "").trim());
+  if (String(config.folder || "").trim()) {
+    body.append("folder", String(config.folder).trim());
+  }
+  body.append("public_id", `${prefix}-${createId("pdf")}`);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    body
+  });
+
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch (error) {
+    payload = {};
+  }
+
+  if (!response.ok || !payload || !payload.secure_url) {
+    const message = String(payload && payload.error && payload.error.message
+      ? payload.error.message
+      : "Cloud upload failed.");
+    throw new Error(message);
+  }
+
+  return {
+    url: String(payload.secure_url || ""),
+    publicId: String(payload.public_id || ""),
+    bytes: Number(payload.bytes || 0)
+  };
 }
 
 function getAccountPrefsMap() {
@@ -1648,6 +1872,12 @@ function cardTemplate(book, options = {}) {
   const safeCategory = escapeHtml(book.category);
   const safeDesc = escapeHtml(book.desc || "No description provided.");
   const encodedId = encodeURIComponent(book.id);
+  const ratingLabel = escapeHtml(formatBookRatingSummary(book.id));
+  const storageMode = book.storageMode === "cloud" ? "Cloud" : "Local";
+  const safeBookUrl = escapeHtml(String(book.bookPdfUrl || "").trim());
+  const cloudFileLink = (book.storageMode === "cloud" && safeBookUrl)
+    ? `<a class="meta-pill meta-link" href="${safeBookUrl}" target="_blank" rel="noopener">Cloud File</a>`
+    : "";
 
   const toggleFeatured = options.showFeaturedToggle
     ? `<button class="btn btn-ghost small" type="button" data-toggle-featured="${encodedId}">${book.featured ? "Unmark Featured" : "Mark Featured"}</button>`
@@ -1664,6 +1894,7 @@ function cardTemplate(book, options = {}) {
       <span class="tag-pill">${safeCategory}</span>
       <h3 class="book-title">${safeTitle}</h3>
       <p class="book-meta">${safeAuthor} · ${safeLang}</p>
+      <p class="book-rating">${ratingLabel}</p>
       <p class="book-text">${safeDesc}</p>
       <div class="book-row">
         <strong class="book-price">${formatPrice(book.price)}</strong>
@@ -1674,7 +1905,7 @@ function cardTemplate(book, options = {}) {
         ${removeAction}
         <a class="btn btn-ghost small" href="book.html?id=${encodedId}">View</a>
       </div>
-      ${options.showFileMeta ? `<div class="inline-meta"><span class="meta-pill">Cover: ${escapeHtml(book.coverPdfName || "N/A")}</span><span class="meta-pill">Book: ${escapeHtml(book.bookPdfName || "N/A")}</span></div>` : ""}
+      ${options.showFileMeta ? `<div class="inline-meta"><span class="meta-pill">Storage: ${storageMode}</span><span class="meta-pill">Cover: ${escapeHtml(book.coverPdfName || "N/A")}</span><span class="meta-pill">Book: ${escapeHtml(book.bookPdfName || "N/A")}</span>${cloudFileLink}</div>` : ""}
     </article>
   `;
 }
@@ -1697,6 +1928,229 @@ function hydrateCovers(scope) {
       .replace(/(\r\n|\n|\r)/gm, "");
 
     element.style.backgroundImage = `url("${safeUrl}")`;
+  });
+}
+
+function getBookCreatedTime(book) {
+  return new Date(book && book.createdAt ? book.createdAt : 0).getTime();
+}
+
+function getFilteredBooks(filters = {}) {
+  const query = String(filters.query || "").trim().toLowerCase();
+  const category = String(filters.category || "all");
+  const lang = String(filters.lang || "all");
+  const featured = String(filters.featured || "all");
+  const sortBy = String(filters.sortBy || "newest");
+
+  let list = getAllBooks().filter((book) => {
+    if (category !== "all" && String(book.category || "") !== category) {
+      return false;
+    }
+    if (lang !== "all" && String(book.lang || "") !== lang) {
+      return false;
+    }
+    if (featured === "featured" && !book.featured) {
+      return false;
+    }
+    if (featured === "not_featured" && book.featured) {
+      return false;
+    }
+
+    if (!query) {
+      return true;
+    }
+
+    const searchable = [
+      book.title,
+      book.author,
+      book.desc,
+      book.category,
+      book.lang
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+
+    return searchable.includes(query);
+  });
+
+  const sorters = {
+    newest: (left, right) => getBookCreatedTime(right) - getBookCreatedTime(left),
+    title_az: (left, right) => String(left.title || "").localeCompare(String(right.title || "")),
+    price_low: (left, right) => Number(left.price || 0) - Number(right.price || 0),
+    price_high: (left, right) => Number(right.price || 0) - Number(left.price || 0),
+    rating_high: (left, right) => {
+      const rightRating = getBookRatingSummary(right.id).average;
+      const leftRating = getBookRatingSummary(left.id).average;
+      if (rightRating !== leftRating) {
+        return rightRating - leftRating;
+      }
+      return getBookCreatedTime(right) - getBookCreatedTime(left);
+    }
+  };
+
+  const sorter = sorters[sortBy] || sorters.newest;
+  list = list.slice().sort(sorter);
+  return list;
+}
+
+function initBookSearchFilters() {
+  const form = document.getElementById("books-discovery-form");
+  const resultRoot = document.getElementById("books-discovery-results");
+  const summary = document.getElementById("books-discovery-summary");
+  if (!(form instanceof HTMLFormElement) || !resultRoot || !summary) {
+    return;
+  }
+
+  const render = () => {
+    const formData = new FormData(form);
+    const books = getFilteredBooks({
+      query: String(formData.get("query") || ""),
+      category: String(formData.get("category") || "all"),
+      lang: String(formData.get("lang") || "all"),
+      featured: String(formData.get("featured") || "all"),
+      sortBy: String(formData.get("sortBy") || "newest")
+    });
+
+    const totalBooks = getAllBooks().length;
+    if (!totalBooks) {
+      summary.textContent = "No books available yet.";
+      resultRoot.innerHTML = "<article class='ebook-card placeholder-cell'><p>Upload books from admin to start discovery.</p></article>";
+      return;
+    }
+
+    summary.textContent = `Found ${books.length} of ${totalBooks} books.`;
+    resultRoot.innerHTML = books.length
+      ? books.map((book) => cardTemplate(book)).join("")
+      : "<article class='ebook-card placeholder-cell'><p>No books match your search and filters.</p></article>";
+    hydrateCovers(resultRoot);
+  };
+
+  if (form.dataset.bound !== "1") {
+    form.dataset.bound = "1";
+    form.addEventListener("input", render);
+    form.addEventListener("change", render);
+
+    const resetButton = form.querySelector("[data-books-filter-reset]");
+    if (resetButton instanceof HTMLButtonElement) {
+      resetButton.addEventListener("click", () => {
+        form.reset();
+        form.querySelectorAll("select.select").forEach((select) => {
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        render();
+      });
+    }
+  }
+
+  render();
+}
+
+function findUserReview(bookId, session) {
+  if (!bookId || !session) {
+    return null;
+  }
+
+  const email = normalizeEmail(session.email);
+  return getBookReviews(bookId).find((review) => {
+    if (!review || typeof review !== "object") {
+      return false;
+    }
+    if (session.id && String(review.userId || "") === String(session.id)) {
+      return true;
+    }
+    return normalizeEmail(review.email || "") === email;
+  }) || null;
+}
+
+function buildReviewListMarkup(bookId) {
+  const reviews = getBookReviews(bookId);
+  if (!reviews.length) {
+    return "<article class='review-card'><p class='info-text'>No reviews yet. Be the first reader to rate this book.</p></article>";
+  }
+
+  return reviews.map((review) => {
+    const safeName = escapeHtml(review.name || "Reader");
+    const safeComment = escapeHtml(review.comment || "No written comment.");
+    const timeLabel = new Date(review.updatedAt || review.createdAt || Date.now()).toLocaleString();
+    return `
+      <article class="review-card">
+        <div class="review-head">
+          <strong>${safeName}</strong>
+          <span class="review-rating-pill">${Number(review.rating || 0)}/5</span>
+        </div>
+        <p class="info-text">${safeComment}</p>
+        <p class="review-time">${timeLabel}</p>
+      </article>
+    `;
+  }).join("");
+}
+
+function refreshBookReviewSection(bookId) {
+  const summary = document.querySelector("[data-book-review-summary]");
+  const list = document.querySelector("[data-book-review-list]");
+  if (!summary || !list) {
+    return;
+  }
+
+  summary.textContent = `Community Rating: ${formatBookRatingSummary(bookId)}`;
+  list.innerHTML = buildReviewListMarkup(bookId);
+}
+
+function bindBookReviewForm(book) {
+  const form = document.getElementById("book-review-form");
+  if (!(form instanceof HTMLFormElement) || !book) {
+    return;
+  }
+
+  const status = form.querySelector("[data-review-status]");
+  const ratingInput = form.querySelector('[name="rating"]');
+  const commentInput = form.querySelector('[name="comment"]');
+  const session = getSession();
+  const existing = findUserReview(book.id, session);
+
+  if (ratingInput instanceof HTMLSelectElement && existing) {
+    ratingInput.value = String(existing.rating);
+  }
+  if (commentInput instanceof HTMLTextAreaElement && existing) {
+    commentInput.value = String(existing.comment || "");
+  }
+
+  initCustomSelects();
+
+  if (form.dataset.bound === "1") {
+    return;
+  }
+  form.dataset.bound = "1";
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const activeSession = getSession();
+    if (!activeSession) {
+      setStatus(status, "Please login to submit a rating and review.", true);
+      return;
+    }
+
+    const formData = new FormData(form);
+    const rating = Number(formData.get("rating") || 0);
+    const comment = String(formData.get("comment") || "").trim();
+
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      setStatus(status, "Please select a rating between 1 and 5.", true);
+      return;
+    }
+
+    if (!upsertBookReview(book.id, activeSession, rating, comment)) {
+      setStatus(status, "Could not save your review. Try again.", true);
+      return;
+    }
+
+    addControlTimeline(normalizeEmail(activeSession.email), `Reviewed book ${book.title}`);
+    setStatus(status, "Your review has been saved.", false);
+    refreshBookReviewSection(book.id);
+    renderHomeCategories();
+    renderBooksPageCategories();
+    renderCategoryPage();
   });
 }
 function renderHomeCategories() {
@@ -1818,6 +2272,9 @@ function renderBookDetail() {
   const safeCategory = escapeHtml(book.category);
   const safeLang = escapeHtml(book.lang);
   const safeDesc = escapeHtml(book.desc || "No description provided.");
+  const ratingSummaryText = escapeHtml(formatBookRatingSummary(book.id));
+  const session = getSession();
+  const userReview = findUserReview(book.id, session);
 
   root.innerHTML = `
     <div class="book-detail-layout">
@@ -1827,6 +2284,7 @@ function renderBookDetail() {
           <span class="section-label">${safeCategory}</span>
           <h2 style="margin:0.55rem 0 0.46rem;">${safeTitle}</h2>
           <p class="book-meta">By ${safeAuthor} · ${safeLang}</p>
+          <p class="book-rating">Community rating: ${ratingSummaryText}</p>
           <p class="book-text">${safeDesc}</p>
           <p class="book-price" style="margin:0.45rem 0;">Price: ${formatPrice(book.price)}</p>
           <div class="inline-meta">
@@ -1850,9 +2308,52 @@ function renderBookDetail() {
         <p style="margin-top:0.65rem;"><a href="mailto:abirxxdbrine2024@gmail.com">abirxxdbrine2024@gmail.com</a></p>
       </aside>
     </div>
+
+    <section class="soft-panel review-panel">
+      <div class="section-header">
+        <div>
+          <span class="section-label">Ratings and Reviews</span>
+          <h3>Reader Feedback</h3>
+          <p class="info-text" data-book-review-summary>Community Rating: ${ratingSummaryText}</p>
+        </div>
+      </div>
+      ${session ? `
+        <form id="book-review-form" class="review-form" novalidate>
+          <div class="field">
+            <label for="review-rating">Your Rating *</label>
+            <select class="select" id="review-rating" name="rating" required>
+              <option value="">Select rating</option>
+              <option value="5">5 - Excellent</option>
+              <option value="4">4 - Very good</option>
+              <option value="3">3 - Good</option>
+              <option value="2">2 - Fair</option>
+              <option value="1">1 - Poor</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="review-comment">Comment (optional)</label>
+            <textarea class="textarea" id="review-comment" name="comment" rows="3" maxlength="700" placeholder="Share your reading experience...">${escapeHtml(userReview ? userReview.comment || "" : "")}</textarea>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit">${userReview ? "Update Review" : "Submit Review"}</button>
+          </div>
+          <p class="status" data-review-status aria-live="polite"></p>
+        </form>
+      ` : `
+        <div class="notice">
+          Login is required to submit ratings and reviews.
+          <a href="login.html">Open login</a>
+        </div>
+      `}
+      <div class="review-list" data-book-review-list>
+        ${buildReviewListMarkup(book.id)}
+      </div>
+    </section>
   `;
 
   hydrateCovers(root);
+  bindBookReviewForm(book);
+  refreshBookReviewSection(book.id);
 
   const relatedRoot = document.getElementById("related-books");
   if (relatedRoot) {
@@ -2279,6 +2780,66 @@ function initLogsPage() {
   }
 }
 
+function initCloudConfigForm() {
+  const form = document.getElementById("cloud-config-form");
+  if (!(form instanceof HTMLFormElement)) {
+    return;
+  }
+
+  const status = document.getElementById("cloud-config-status");
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const cloudNameInput = form.querySelector('[name="cloudName"]');
+  const uploadPresetInput = form.querySelector('[name="uploadPreset"]');
+  const folderInput = form.querySelector('[name="folder"]');
+
+  const applyValues = () => {
+    const config = getCloudConfig();
+    if (enabledInput instanceof HTMLInputElement) {
+      enabledInput.checked = Boolean(config.enabled);
+    }
+    if (cloudNameInput instanceof HTMLInputElement) {
+      cloudNameInput.value = String(config.cloudName || "");
+    }
+    if (uploadPresetInput instanceof HTMLInputElement) {
+      uploadPresetInput.value = String(config.uploadPreset || "");
+    }
+    if (folderInput instanceof HTMLInputElement) {
+      folderInput.value = String(config.folder || "e-zone");
+    }
+  };
+
+  applyValues();
+
+  if (form.dataset.bound === "1") {
+    return;
+  }
+  form.dataset.bound = "1";
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const enabled = Boolean(formData.get("enabled"));
+    const cloudName = String(formData.get("cloudName") || "").trim();
+    const uploadPreset = String(formData.get("uploadPreset") || "").trim();
+    const folder = String(formData.get("folder") || "e-zone").trim();
+
+    if (enabled && (!cloudName || !uploadPreset)) {
+      setStatus(status, "Cloud name and upload preset are required when cloud mode is enabled.", true);
+      return;
+    }
+
+    saveCloudConfig({
+      provider: "cloudinary",
+      enabled,
+      cloudName,
+      uploadPreset,
+      folder: folder || "e-zone"
+    });
+
+    setStatus(status, enabled ? "Cloudinary upload is enabled." : "Cloud upload is disabled. Local mode is active.", false);
+  });
+}
+
 function initAdminPage() {
   const panel = document.getElementById("admin-panel");
   if (!panel) {
@@ -2310,6 +2871,8 @@ function initAdminPage() {
     guard.classList.add("hidden");
   }
 
+  initCloudConfigForm();
+
   const form = document.getElementById("admin-book-form");
   const status = document.getElementById("admin-status");
   const uploadList = document.getElementById("admin-upload-list");
@@ -2332,6 +2895,7 @@ function initAdminPage() {
         const deletedBook = books.find((book) => book.id === id);
         const next = books.filter((book) => book.id !== id);
         saveCustomBooks(next);
+        removeBookReviews(id);
         renderAdminUploadedBooks();
         renderHomeCategories();
         renderBooksPageCategories();
@@ -2410,22 +2974,55 @@ function initAdminPage() {
       return;
     }
 
-    if (coverPdfFile.size > 1_600_000 || bookPdfFile.size > 2_300_000) {
-      setStatus(status, "PDF files are too large for local demo storage. Use smaller files.", true);
+    const cloudConfig = getCloudConfig();
+    const useCloud = isCloudUploadReady(cloudConfig);
+
+    if (cloudConfig.enabled && !useCloud) {
+      setStatus(status, "Cloud upload is enabled but incomplete. Save valid cloud config first.", true);
+      return;
+    }
+
+    const maxCoverSize = useCloud ? 12_000_000 : 1_600_000;
+    const maxBookSize = useCloud ? 18_000_000 : 2_300_000;
+    if (coverPdfFile.size > maxCoverSize || bookPdfFile.size > maxBookSize) {
+      setStatus(
+        status,
+        useCloud
+          ? "PDF files exceed cloud demo size limits (12MB cover, 18MB book)."
+          : "PDF files are too large for local demo storage. Use smaller files.",
+        true
+      );
       return;
     }
 
     let coverPdfData = "";
     let bookPdfData = "";
+    let coverPdfUrl = "";
+    let bookPdfUrl = "";
+    const storageMode = useCloud ? "cloud" : "local";
 
-    try {
-      [coverPdfData, bookPdfData] = await Promise.all([
-        readFileAsDataUrl(coverPdfFile),
-        readFileAsDataUrl(bookPdfFile)
-      ]);
-    } catch (error) {
-      setStatus(status, "Unable to process PDF files.", true);
-      return;
+    if (useCloud) {
+      try {
+        const [coverUpload, bookUpload] = await Promise.all([
+          uploadPdfToCloudinary(coverPdfFile, cloudConfig, "cover"),
+          uploadPdfToCloudinary(bookPdfFile, cloudConfig, "book")
+        ]);
+        coverPdfUrl = coverUpload.url;
+        bookPdfUrl = bookUpload.url;
+      } catch (error) {
+        setStatus(status, `Cloud upload failed: ${error instanceof Error ? error.message : "Unknown error"}`, true);
+        return;
+      }
+    } else {
+      try {
+        [coverPdfData, bookPdfData] = await Promise.all([
+          readFileAsDataUrl(coverPdfFile),
+          readFileAsDataUrl(bookPdfFile)
+        ]);
+      } catch (error) {
+        setStatus(status, "Unable to process PDF files.", true);
+        return;
+      }
     }
 
     const customBooks = getCustomBooks();
@@ -2442,8 +3039,11 @@ function initAdminPage() {
       coverPreview: buildCoverImage(title, category),
       coverPdfName: coverPdfFile.name,
       coverPdfData,
+      coverPdfUrl,
       bookPdfName: bookPdfFile.name,
       bookPdfData,
+      bookPdfUrl,
+      storageMode,
       isCustom: true,
       createdAt: new Date().toISOString()
     });
@@ -2454,7 +3054,7 @@ function initAdminPage() {
     renderHomeCategories();
     renderBooksPageCategories();
     renderCategoryPage();
-    logAdminEvent(`Uploaded book ${title}`);
+    logAdminEvent(`Uploaded book ${title} (${storageMode})`);
 
     setStatus(status, "Book uploaded successfully.", false);
   });
@@ -2502,6 +3102,7 @@ async function initialize() {
 
   renderHomeCategories();
   renderBooksPageCategories();
+  initBookSearchFilters();
   renderCategoryPage();
   renderBookDetail();
 

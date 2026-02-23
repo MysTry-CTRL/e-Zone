@@ -142,6 +142,65 @@
     </section>
 
     <section class="section container">
+      <article class="form-card discovery-panel">
+        <div class="section-header">
+          <div>
+            <span class="section-label">Search and Filter</span>
+            <h2>Find the right ebook fast</h2>
+            <p>Search by title/author and filter by category, language, featured status, and sort order.</p>
+          </div>
+        </div>
+        <form id="books-discovery-form" class="discovery-grid" novalidate>
+          <div class="field">
+            <label for="discover-query">Search</label>
+            <input class="input" id="discover-query" name="query" type="search" placeholder="Title, author, description...">
+          </div>
+          <div class="field">
+            <label for="discover-category">Category</label>
+            <select class="select" id="discover-category" name="category">
+              <option value="all">All categories</option>
+              <option value="Love and Romance">Love and Romance</option>
+              <option value="Fiction">Fiction</option>
+              <option value="Non-fiction">Non-fiction</option>
+              <option value="Science Fiction">Science Fiction</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="discover-language">Language</label>
+            <select class="select" id="discover-language" name="lang">
+              <option value="all">All languages</option>
+              <option value="Bangla">Bangla</option>
+              <option value="English">English</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="discover-featured">Featured</label>
+            <select class="select" id="discover-featured" name="featured">
+              <option value="all">All</option>
+              <option value="featured">Featured only</option>
+              <option value="not_featured">Non-featured only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="discover-sort">Sort By</label>
+            <select class="select" id="discover-sort" name="sortBy">
+              <option value="newest">Newest first</option>
+              <option value="title_az">Title A-Z</option>
+              <option value="price_low">Price low to high</option>
+              <option value="price_high">Price high to low</option>
+              <option value="rating_high">Highest rated</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn btn-ghost" type="button" data-books-filter-reset>Reset Filters</button>
+          </div>
+        </form>
+        <p id="books-discovery-summary" class="info-text">Loading books...</p>
+        <div id="books-discovery-results" class="cards-grid"></div>
+      </article>
+    </section>
+
+    <section class="section container">
       <div class="cards-grid">
         <article class="soft-panel">
           <h3>How to Buy a Book</h3>

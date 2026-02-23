@@ -216,6 +216,30 @@
             <div class="notice" style="margin-top:0.75rem;">
               Login/registration cannot create admin credentials. Admin is fixed in system seed.
             </div>
+
+            <div class="panel-divider"></div>
+            <h3>Cloud Storage Integration</h3>
+            <p class="info-text">Optional Cloudinary integration for storing uploaded PDF files in cloud storage.</p>
+            <form id="cloud-config-form" class="cloud-config-form" novalidate>
+              <label class="checkbox-row">
+                <input type="checkbox" name="enabled">
+                Enable cloud upload
+              </label>
+              <div class="field">
+                <label for="cloud-name">Cloud Name</label>
+                <input class="input" id="cloud-name" name="cloudName" type="text" placeholder="your-cloud-name">
+              </div>
+              <div class="field">
+                <label for="cloud-preset">Upload Preset</label>
+                <input class="input" id="cloud-preset" name="uploadPreset" type="text" placeholder="unsigned-preset">
+              </div>
+              <div class="field">
+                <label for="cloud-folder">Folder (optional)</label>
+                <input class="input" id="cloud-folder" name="folder" type="text" placeholder="e-zone">
+              </div>
+              <button class="btn btn-ghost" type="submit">Save Cloud Config</button>
+              <p id="cloud-config-status" class="status" aria-live="polite"></p>
+            </form>
           </aside>
         </div>
 
