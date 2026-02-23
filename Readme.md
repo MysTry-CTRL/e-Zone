@@ -53,18 +53,6 @@ Admin can:
 
 ---
 
-### 🛒 Purchase Flow
-Instead of QR codes, each book displays:
-- Step-by-step instructions for purchasing
-
----
-
-### 📱 Social Integration
-- YouTube: https://youtube.com/@MysTryReyal
-- Instagram: (configurable)
-
----
-
 ### ⚡ Animations
 - Page background animations across all sections
 - Login/Register animated backgrounds
@@ -78,18 +66,6 @@ Instead of QR codes, each book displays:
 - CSS3 (Animations, Dark Mode, Responsive UI)
 - JavaScript (UI logic & interactions)
 - PDF file handling system
-
----
-
-## 🔑 Admin Credentials
-
-> ⚠️ These are for project demonstration only.
-
-Email: `abirxxdbrine2024@gmail.com`  
-Password: `6769#6967`
-
----
-
 
 ---
 
