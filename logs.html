@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Register | e-Zone</title>
-  <meta name="description" content="Register a user account on e-Zone.">
+  <title>Logs | e-Zone</title>
+  <meta name="description" content="Global activity logs for e-Zone admin.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,7 @@
   <div class="page-loader" data-page-loader>
     <div class="loader-shell">
       <div class="loader-ring"></div>
-      <p>Loading registration gateway...</p>
+      <p>Loading global logs...</p>
     </div>
   </div>
 
@@ -128,37 +128,50 @@
   </div>
 
   <main>
-    <section class="section container" style="max-width:540px;">
-      <article class="form-card">
-        <span class="section-label">User Registration</span>
-        <h2>Create an e-Zone account</h2>
-        <p class="info-text">Admin account creation is disabled in registration.</p>
-
-        <form id="signup-form" novalidate>
-          <div class="field">
-            <label for="signup-name">Full Name</label>
-            <input class="input" id="signup-name" name="name" type="text" required>
-          </div>
-
-          <div class="field">
-            <label for="signup-email">Email</label>
-            <input class="input" id="signup-email" name="email" type="email" required>
-          </div>
-
-          <div class="field">
-            <label for="signup-password">Password</label>
-            <input class="input" id="signup-password" name="password" type="password" minlength="8" required>
-          </div>
-
-          <div class="field">
-            <label for="signup-confirm">Confirm Password</label>
-            <input class="input" id="signup-confirm" name="confirmPassword" type="password" minlength="8" required>
-          </div>
-
-          <button class="btn btn-primary" type="submit">Register</button>
-          <p id="signup-status" class="status" aria-live="polite"></p>
-        </form>
+    <section class="section container">
+      <article id="logs-guard" class="soft-panel">
+        <h2>Admin Access Required</h2>
+        <p class="info-text">Only admin can view all user logs.</p>
+        <div class="actions" style="margin-top:0.65rem;">
+          <a class="btn btn-primary" href="login.html">Go to Login</a>
+        </div>
       </article>
+
+      <section id="logs-panel" class="hidden">
+        <div class="section-header">
+          <div>
+            <span class="section-label">Global Logs</span>
+            <h2>All Logs for Everyone</h2>
+            <p>Complete system activity from all users and categories.</p>
+          </div>
+          <div class="actions">
+            <a class="btn btn-ghost" href="dashboard.html">Dashboard</a>
+            <a class="btn btn-primary" href="admin.html">Upload Page</a>
+          </div>
+        </div>
+
+        <div class="cards-grid">
+          <article class="soft-panel"><h3>Total Users</h3><p class="book-price" id="logs-total-users">0</p></article>
+          <article class="soft-panel"><h3>Total Events</h3><p class="book-price" id="logs-total-events">0</p></article>
+          <article class="soft-panel"><h3>Total Visits</h3><p class="book-price" id="logs-total-visits">0</p></article>
+          <article class="soft-panel"><h3>Total Purchases</h3><p class="book-price" id="logs-total-purchases">0</p></article>
+        </div>
+
+        <article class="soft-panel">
+          <h3>Global Timeline</h3>
+          <div class="menu-log" id="logs-global-list"></div>
+        </article>
+
+        <section class="section" style="padding-inline:0;">
+          <div class="section-header">
+            <div>
+              <h2>Per-User Logs</h2>
+              <p>All recorded events grouped by user.</p>
+            </div>
+          </div>
+          <div id="logs-user-grid" class="cards-grid"></div>
+        </section>
+      </section>
     </section>
   </main>
 
@@ -193,8 +206,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-
-
-
-
-

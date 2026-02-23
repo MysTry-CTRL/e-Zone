@@ -4,7 +4,8 @@ const STORAGE_KEYS = {
   session: "ezone_session_v3",
   customBooks: "ezone_custom_books_v3",
   theme: "ezone_theme_v1",
-  accountPrefs: "ezone_account_prefs_v1"
+  accountPrefs: "ezone_account_prefs_v1",
+  controlCenterLogs: "ezone_control_center_logs_v1"
 };
 
 const ADMIN_ACCOUNT = {
@@ -120,24 +121,7 @@ function createDefaultBook(id, title, author, lang, category, price, featured) {
   };
 }
 
-const DEFAULT_BOOKS = [
-  createDefaultBook("love-romance-1", "Moonlight Promise", "A. Nila", "Bangla", "Love and Romance", 290, true),
-  createDefaultBook("love-romance-2", "Letters in Rain", "S. Karim", "English", "Love and Romance", 320, true),
-  createDefaultBook("love-romance-3", "Neon Heartline", "M. Rahman", "English", "Love and Romance", 350, true),
-  createDefaultBook("love-romance-4", "Silent Bloom", "R. Tania", "Bangla", "Love and Romance", 270, false),
-  createDefaultBook("fiction-1", "City of Echoes", "T. Hasan", "English", "Fiction", 330, true),
-  createDefaultBook("fiction-2", "Golper Shehor", "F. Noor", "Bangla", "Fiction", 280, true),
-  createDefaultBook("fiction-3", "Mirage Code", "L. Azad", "English", "Fiction", 370, true),
-  createDefaultBook("fiction-4", "Broken Compass", "R. Das", "Bangla", "Fiction", 300, false),
-  createDefaultBook("nonfiction-1", "Atomic Routine", "S. Hridoy", "English", "Non-fiction", 340, true),
-  createDefaultBook("nonfiction-2", "Shomoyer Byabosthapona", "N. Jahan", "Bangla", "Non-fiction", 260, true),
-  createDefaultBook("nonfiction-3", "Deep Work Notes", "P. Arif", "English", "Non-fiction", 360, true),
-  createDefaultBook("nonfiction-4", "Career Reset", "D. Islam", "Bangla", "Non-fiction", 310, false),
-  createDefaultBook("sci-fi-1", "Orbit 2099", "I. Mahin", "English", "Science Fiction", 390, true),
-  createDefaultBook("sci-fi-2", "Nokkhotro Jatra", "B. Raihan", "Bangla", "Science Fiction", 320, true),
-  createDefaultBook("sci-fi-3", "Quantum Drift", "S. Farhan", "English", "Science Fiction", 410, true),
-  createDefaultBook("sci-fi-4", "Future Dhaka", "A. Mrittika", "Bangla", "Science Fiction", 350, false)
-];
+const DEFAULT_BOOKS = [];
 function readStorage(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -207,28 +191,52 @@ function saveAccountPrefsMap(prefs) {
 }
 
 function getAccountPrefs(userId) {
+  const defaults = {
+    displayName: "",
+    bio: "",
+    accent: "",
+    theme: "dark",
+    compact: false,
+    layoutDensity: "comfortable",
+    glowIntensity: 70,
+    fontScale: 1,
+    radius: 20,
+    animationIntensity: "full",
+    respectReducedMotion: true,
+    scrollBehavior: "smooth",
+    showEmail: true,
+    showActivity: true,
+    publicProfile: true,
+    showPurchases: true
+  };
+
   if (!userId) {
-    return {
-      displayName: "",
-      bio: "",
-      accent: ""
-    };
+    return defaults;
   }
 
   const prefsMap = getAccountPrefsMap();
   const saved = prefsMap[userId];
   if (!saved || typeof saved !== "object") {
-    return {
-      displayName: "",
-      bio: "",
-      accent: ""
-    };
+    return defaults;
   }
 
   return {
     displayName: String(saved.displayName || ""),
     bio: String(saved.bio || ""),
-    accent: String(saved.accent || "")
+    accent: String(saved.accent || ""),
+    theme: saved.theme === "light" ? "light" : "dark",
+    compact: Boolean(saved.compact),
+    layoutDensity: saved.layoutDensity === "compact" ? "compact" : "comfortable",
+    glowIntensity: Math.min(100, Math.max(0, Number(saved.glowIntensity) || 70)),
+    fontScale: Math.min(1.2, Math.max(0.85, Number(saved.fontScale) || 1)),
+    radius: Math.min(32, Math.max(12, Number(saved.radius) || 20)),
+    animationIntensity: saved.animationIntensity === "reduced" ? "reduced" : "full",
+    respectReducedMotion: saved.respectReducedMotion !== false,
+    scrollBehavior: saved.scrollBehavior === "instant" ? "instant" : "smooth",
+    showEmail: saved.showEmail !== false,
+    showActivity: saved.showActivity !== false,
+    publicProfile: saved.publicProfile !== false,
+    showPurchases: saved.showPurchases !== false
   };
 }
 
@@ -241,7 +249,20 @@ function setAccountPrefs(userId, prefs) {
   prefsMap[userId] = {
     displayName: String(prefs.displayName || ""),
     bio: String(prefs.bio || ""),
-    accent: String(prefs.accent || "")
+    accent: String(prefs.accent || ""),
+    theme: prefs.theme === "light" ? "light" : "dark",
+    compact: Boolean(prefs.compact),
+    layoutDensity: prefs.layoutDensity === "compact" ? "compact" : "comfortable",
+    glowIntensity: Math.min(100, Math.max(0, Number(prefs.glowIntensity) || 70)),
+    fontScale: Math.min(1.2, Math.max(0.85, Number(prefs.fontScale) || 1)),
+    radius: Math.min(32, Math.max(12, Number(prefs.radius) || 20)),
+    animationIntensity: prefs.animationIntensity === "reduced" ? "reduced" : "full",
+    respectReducedMotion: prefs.respectReducedMotion !== false,
+    scrollBehavior: prefs.scrollBehavior === "instant" ? "instant" : "smooth",
+    showEmail: prefs.showEmail !== false,
+    showActivity: prefs.showActivity !== false,
+    publicProfile: prefs.publicProfile !== false,
+    showPurchases: prefs.showPurchases !== false
   };
   saveAccountPrefsMap(prefsMap);
 }
@@ -395,15 +416,58 @@ function getStoredTheme() {
   return stored === "dark" || stored === "light" ? stored : "";
 }
 
+function themeIconSvg(kind) {
+  if (kind === "moon") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.9 14.2A9 9 0 1 1 9.8 3.1a.8.8 0 0 1 1 .95A7 7 0 0 0 19.95 13a.8.8 0 0 1 .95 1.2z" fill="currentColor"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a1 1 0 0 1 1 1v1.2a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1zm0 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm8-5a1 1 0 0 1 0 2h-1.2a1 1 0 1 1 0-2H20zM6.2 12a1 1 0 0 1-1 1H4a1 1 0 1 1 0-2h1.2a1 1 0 0 1 1 1zm9.14-5.54a1 1 0 0 1 0-1.42l.86-.85a1 1 0 1 1 1.41 1.41l-.85.86a1 1 0 0 1-1.42 0zM7.23 14.65a1 1 0 0 1 1.41 0 1 1 0 0 1 0 1.41l-.86.86a1 1 0 0 1-1.41-1.42l.86-.85zm9.82 2.27-.86-.86a1 1 0 1 1 1.41-1.41l.85.86a1 1 0 1 1-1.4 1.4zM7.23 9.35l-.86-.86a1 1 0 0 1 1.41-1.41l.86.86A1 1 0 0 1 7.23 9.35zM12 17.8a1 1 0 0 1 1 1V20a1 1 0 1 1-2 0v-1.2a1 1 0 0 1 1-1z" fill="currentColor"/></svg>';
+}
+
+function ensureNavThemeToggle() {
+  document.querySelectorAll(".main-nav").forEach((nav) => {
+    if (nav.querySelector("[data-theme-toggle]")) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "theme-toggle-circle";
+    button.setAttribute("data-theme-toggle", "1");
+    button.innerHTML = `<span class="theme-icon" aria-hidden="true">${themeIconSvg("sun")}</span>`;
+
+    const contact = Array.from(nav.querySelectorAll("a.nav-link")).find((link) => {
+      return String(link.textContent || "").trim().toLowerCase() === "contact";
+    });
+
+    if (contact) {
+      contact.insertAdjacentElement("afterend", button);
+      return;
+    }
+    nav.appendChild(button);
+  });
+
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    if (button.dataset.bound === "1") {
+      return;
+    }
+    button.dataset.bound = "1";
+    button.addEventListener("click", () => {
+      toggleTheme();
+    });
+  });
+}
+
 function updateThemeToggleLabels(theme) {
   const isDark = theme === "dark";
-  const nextLabel = isDark ? "Light" : "Dark";
-  const marker = isDark ? "L" : "D";
+  const nextLabel = isDark ? "light" : "dark";
+  const icon = isDark ? themeIconSvg("sun") : themeIconSvg("moon");
 
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
     button.setAttribute("aria-label", `Switch to ${nextLabel} mode`);
     button.setAttribute("title", `Switch to ${nextLabel} mode`);
-    button.innerHTML = `<span aria-hidden="true">${marker}</span><span>${nextLabel}</span>`;
+    button.innerHTML = `<span class="theme-icon" aria-hidden="true">${icon}</span>`;
+    button.classList.toggle("is-dark-target", !isDark);
+    button.classList.toggle("is-light-target", isDark);
   });
 }
 
@@ -420,31 +484,52 @@ function toggleTheme() {
 }
 
 function initThemeToggle() {
-  document.querySelectorAll(".control-center").forEach((control) => {
-    if (control.querySelector("[data-theme-toggle]")) {
-      return;
-    }
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "theme-toggle";
-    button.dataset.themeToggle = "1";
-    control.prepend(button);
-  });
-
-  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
-    if (button.dataset.bound === "1") {
-      return;
-    }
-
-    button.dataset.bound = "1";
-    button.addEventListener("click", () => {
-      toggleTheme();
-    });
-  });
-
+  ensureNavThemeToggle();
   const saved = getStoredTheme();
   applyTheme(saved || getPreferredTheme());
+}
+
+function ensureHeaderScrollIndicator() {
+  const header = document.querySelector("header.site-header");
+  if (!header) {
+    return;
+  }
+  if (!header.querySelector(".scroll-indicator")) {
+    const indicator = document.createElement("div");
+    indicator.className = "scroll-indicator";
+    indicator.innerHTML = '<span data-scroll-progress></span>';
+    header.appendChild(indicator);
+  }
+
+  const syncHeaderOffset = () => {
+    const headerHeight = Math.ceil(header.getBoundingClientRect().height);
+    document.documentElement.style.setProperty("--header-offset", `${headerHeight}px`);
+  };
+
+  syncHeaderOffset();
+  if (document.body.dataset.headerOffsetBound !== "1") {
+    document.body.dataset.headerOffsetBound = "1";
+    window.addEventListener("resize", syncHeaderOffset);
+    window.addEventListener("load", syncHeaderOffset, { once: true });
+    window.setTimeout(syncHeaderOffset, 60);
+  }
+
+  const bars = Array.from(document.querySelectorAll("[data-scroll-progress]"));
+  const updateProgress = () => {
+    const top = window.scrollY || document.documentElement.scrollTop;
+    const height = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const progress = Math.min(100, Math.max(0, (top / height) * 100));
+    bars.forEach((bar) => {
+      bar.style.width = `${progress}%`;
+    });
+  };
+
+  updateProgress();
+  if (document.body.dataset.scrollProgressBound !== "1") {
+    document.body.dataset.scrollProgressBound = "1";
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("resize", updateProgress);
+  }
 }
 
 function closeAccountModal() {
@@ -781,134 +866,770 @@ function initSocialLinks() {
   });
 }
 
-function closeControlMenu() {
-  document.querySelectorAll("[data-user-menu]").forEach((menu) => menu.classList.remove("open"));
-  document.querySelectorAll("[data-user-overlay]").forEach((overlay) => overlay.classList.remove("open"));
+let controlCenterSessionStartMs = Date.now();
+
+function getControlCenterLogs() {
+  const logs = readStorage(STORAGE_KEYS.controlCenterLogs, {});
+  return logs && typeof logs === "object" && !Array.isArray(logs) ? logs : {};
 }
 
-function openControlMenu() {
-  document.querySelectorAll("[data-user-menu]").forEach((menu) => menu.classList.add("open"));
-  document.querySelectorAll("[data-user-overlay]").forEach((overlay) => overlay.classList.add("open"));
+function saveControlCenterLogs(logs) {
+  writeStorage(STORAGE_KEYS.controlCenterLogs, logs);
 }
 
-function refreshControlCenter() {
+function ensureControlLogRecord(userKey) {
+  const logs = getControlCenterLogs();
+  const existing = logs[userKey];
+  if (!existing || typeof existing !== "object") {
+    logs[userKey] = {
+      visits: 0,
+      totalVisitMs: 0,
+      purchases: [],
+      timeline: [],
+      lastVisitAt: ""
+    };
+    saveControlCenterLogs(logs);
+  }
+  return getControlCenterLogs()[userKey];
+}
+
+function addControlTimeline(userKey, message) {
+  const logs = getControlCenterLogs();
+  const record = logs[userKey] || {
+    visits: 0,
+    totalVisitMs: 0,
+    purchases: [],
+    timeline: [],
+    lastVisitAt: ""
+  };
+  const nextTimeline = Array.isArray(record.timeline) ? record.timeline : [];
+  nextTimeline.unshift({
+    message: String(message || "Activity"),
+    time: new Date().toISOString()
+  });
+  record.timeline = nextTimeline.slice(0, 18);
+  logs[userKey] = record;
+  saveControlCenterLogs(logs);
+}
+
+function registerControlCenterVisit() {
   const session = getSession();
-  const isLoggedIn = Boolean(session);
-  const isAdmin = Boolean(session && session.role === "admin");
-  const prefs = session ? getAccountPrefs(session.id) : null;
-  const displayName = prefs && prefs.displayName ? prefs.displayName : (session ? session.name : "");
+  if (!session || !session.email) {
+    return;
+  }
 
-  document.querySelectorAll("[data-profile-avatar]").forEach((el) => {
-    el.textContent = isLoggedIn ? getInitials(displayName, "EZ") : "CC";
+  const userKey = normalizeEmail(session.email);
+  const logs = getControlCenterLogs();
+  const record = logs[userKey] || {
+    visits: 0,
+    totalVisitMs: 0,
+    purchases: [],
+    timeline: [],
+    lastVisitAt: ""
+  };
+  record.visits = Number(record.visits || 0) + 1;
+  record.lastVisitAt = new Date().toISOString();
+  record.timeline = Array.isArray(record.timeline) ? record.timeline : [];
+  record.timeline.unshift({
+    message: `Visited ${document.body.dataset.page || "page"}`,
+    time: new Date().toISOString()
   });
+  record.timeline = record.timeline.slice(0, 18);
+  logs[userKey] = record;
+  saveControlCenterLogs(logs);
+  controlCenterSessionStartMs = Date.now();
+}
 
-  document.querySelectorAll("[data-profile-email]").forEach((el) => {
-    el.textContent = isLoggedIn ? session.email : "Open account panel";
-  });
+function persistControlCenterSessionTime() {
+  const session = getSession();
+  if (!session || !session.email) {
+    return;
+  }
 
-  document.querySelectorAll("[data-user-role-label]").forEach((el) => {
-    el.textContent = isLoggedIn ? (isAdmin ? "Admin Access" : "User Access") : "Account Access";
-  });
+  const elapsed = Date.now() - controlCenterSessionStartMs;
+  if (!Number.isFinite(elapsed) || elapsed <= 0) {
+    return;
+  }
 
-  document.querySelectorAll("[data-user-menu-title]").forEach((el) => {
-    el.textContent = isLoggedIn ? "Account Control Center" : "Access Control Center";
-  });
+  const userKey = normalizeEmail(session.email);
+  const logs = getControlCenterLogs();
+  const record = logs[userKey] || {
+    visits: 0,
+    totalVisitMs: 0,
+    purchases: [],
+    timeline: [],
+    lastVisitAt: ""
+  };
+  record.totalVisitMs = Number(record.totalVisitMs || 0) + elapsed;
+  logs[userKey] = record;
+  saveControlCenterLogs(logs);
+  controlCenterSessionStartMs = Date.now();
+}
 
-  document.querySelectorAll("[data-user-menu-sub]").forEach((el) => {
-    el.textContent = isLoggedIn
-      ? "Manage account actions, uploads, and secure session controls."
-      : "Login or register to unlock account controls.";
-  });
+function formatControlDuration(ms) {
+  const value = Math.max(0, Number(ms) || 0);
+  const totalMinutes = Math.floor(value / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
 
-  document.querySelectorAll("[data-user-name]").forEach((el) => {
-    el.textContent = isLoggedIn ? displayName : "Not Signed In";
-  });
+function ensureCybrlyProfileCustomizeModal() {
+  if (document.querySelector('[data-modal="profile-customize"]')) {
+    return;
+  }
 
-  document.querySelectorAll("[data-user-email]").forEach((el) => {
-    el.textContent = isLoggedIn ? session.email : "Use Login / Register";
-  });
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.dataset.modal = "profile-customize";
+  modal.innerHTML = `
+    <div class="modal-content glass modal-customize">
+      <button class="modal-close" type="button" data-close-modal>&times;</button>
+      <p class="eyebrow">Profile Studio</p>
+      <h3>Customize Profile</h3>
+      <p class="muted">Personalize identity, appearance, interface, and privacy with instant live updates.</p>
+      <div class="form-message" data-customize-status></div>
+      <div class="customize-section">
+        <h4>Identity</h4>
+        <div class="customize-grid">
+          <label>
+            Display Name (optional)
+            <input class="input" type="text" data-pref-field="displayName" maxlength="44" placeholder="Your display name">
+          </label>
+          <label>
+            Bio / Tagline
+            <input class="input" type="text" data-pref-field="bio" maxlength="140" placeholder="Short, clean tagline">
+          </label>
+        </div>
+      </div>
+      <div class="customize-section">
+        <h4>Appearance</h4>
+        <div class="customize-grid">
+          <label>
+            Theme Mode
+            <select class="input select" data-pref-field="theme">
+              <option value="dark">Dark (Recommended)</option>
+              <option value="light">Light (Not recommended)</option>
+            </select>
+          </label>
+          <label>
+            Accent Color
+            <input class="input" type="color" data-pref-field="accent" />
+          </label>
+          <label>
+            Glow Intensity
+            <div class="range-row">
+              <input class="input" type="range" min="0" max="100" step="1" data-pref-field="glowIntensity">
+              <span class="range-value" data-range-value="glowIntensity">70%</span>
+            </div>
+          </label>
+          <label>
+            Font Scale
+            <div class="range-row">
+              <input class="input" type="range" min="0.85" max="1.2" step="0.05" data-pref-field="fontScale">
+              <span class="range-value" data-range-value="fontScale">1.00x</span>
+            </div>
+          </label>
+          <label>
+            Card Radius
+            <div class="range-row">
+              <input class="input" type="range" min="12" max="32" step="1" data-pref-field="radius">
+              <span class="range-value" data-range-value="radius">20px</span>
+            </div>
+          </label>
+          <label>
+            Layout Density
+            <select class="input select" data-pref-field="layoutDensity">
+              <option value="comfortable">Comfortable</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+          <label class="toggle-field">
+            <input type="checkbox" data-pref-field="compact" />
+            Compact layout toggle
+          </label>
+        </div>
+      </div>
+      <div class="customize-section">
+        <h4>Interface</h4>
+        <div class="customize-grid">
+          <label>
+            Animation Intensity
+            <select class="input select" data-pref-field="animationIntensity">
+              <option value="full">Full Motion</option>
+              <option value="reduced">Reduced Motion</option>
+            </select>
+          </label>
+          <label>
+            Scroll Behavior
+            <select class="input select" data-pref-field="scrollBehavior">
+              <option value="smooth">Smooth</option>
+              <option value="instant">Instant</option>
+            </select>
+          </label>
+          <label class="toggle-field">
+            <input type="checkbox" data-pref-field="respectReducedMotion" />
+            Respect System Reduced Motion
+          </label>
+        </div>
+      </div>
+      <div class="customize-section">
+        <h4>Privacy</h4>
+        <div class="customize-grid">
+          <label class="toggle-field">
+            <input type="checkbox" data-pref-field="showEmail" />
+            Show email in control center
+          </label>
+          <label class="toggle-field">
+            <input type="checkbox" data-pref-field="showActivity" />
+            Show activity timeline
+          </label>
+          <label class="toggle-field">
+            <input type="checkbox" data-pref-field="showPurchases" />
+            Show purchase list
+          </label>
+          <label class="toggle-field">
+            <input type="checkbox" data-pref-field="publicProfile" />
+            Public profile visibility
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" type="button" data-close-modal>Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
 
-  document.querySelectorAll("[data-user-role-badge]").forEach((el) => {
-    el.textContent = isLoggedIn ? (isAdmin ? "Admin" : "User") : "Visitor";
-  });
+function showCybrlyModal(key) {
+  const modal = document.querySelector(`[data-modal="${key}"]`);
+  if (!modal) {
+    return;
+  }
+  modal.classList.add("show");
+  updateControlCenterScrollLock();
+}
 
-  document.querySelectorAll("[data-menu-login], [data-menu-signup]").forEach((el) => {
-    el.classList.toggle("hidden", isLoggedIn);
-  });
+function hideCybrlyModal(modal) {
+  if (!modal) {
+    return;
+  }
+  modal.classList.remove("show");
+  updateControlCenterScrollLock();
+}
 
-  document.querySelectorAll("[data-menu-account], [data-menu-logout]").forEach((el) => {
-    el.classList.toggle("hidden", !isLoggedIn);
-  });
+function applyCybrlyControlPrefs(prefs) {
+  if (!prefs || typeof prefs !== "object") {
+    return;
+  }
+  applyTheme(prefs.theme === "light" ? "light" : "dark");
+  const compactLayout = prefs.layoutDensity === "compact" || Boolean(prefs.compact);
+  document.body.classList.toggle("layout-compact", compactLayout);
+  document.body.classList.toggle("hide-email", prefs.showEmail === false);
+  document.body.classList.toggle("hide-activity", prefs.showActivity === false);
+  document.body.classList.toggle("hide-purchases", prefs.showPurchases === false);
+  document.body.classList.toggle("profile-private", prefs.publicProfile === false);
 
-  document.querySelectorAll("[data-menu-admin]").forEach((el) => {
-    el.classList.toggle("hidden", !isAdmin);
-  });
+  const scale = Math.min(1.2, Math.max(0.85, Number(prefs.fontScale) || 1));
+  const radius = Math.min(32, Math.max(12, Number(prefs.radius) || 20));
+  const glow = Math.min(100, Math.max(0, Number(prefs.glowIntensity) || 70));
+
+  document.documentElement.style.fontSize = `${(scale * 100).toFixed(0)}%`;
+  document.documentElement.style.setProperty("--radius-xl", `${radius}px`);
+  document.documentElement.style.setProperty("--radius-lg", `${Math.max(10, radius - 6)}px`);
+  document.documentElement.style.setProperty("--radius-md", `${Math.max(8, radius - 12)}px`);
+  document.documentElement.style.setProperty("--control-glow-strength", String((glow / 100).toFixed(2)));
+
+  const prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const shouldReduceMotion = prefs.animationIntensity === "reduced" || (prefs.respectReducedMotion && prefersReduced);
+  document.body.classList.toggle("reduce-motion", Boolean(shouldReduceMotion));
+
+  const scrollMode = prefs.scrollBehavior === "instant" ? "auto" : "smooth";
+  document.documentElement.style.scrollBehavior = scrollMode;
+  document.body.style.scrollBehavior = scrollMode;
 
   applyUserAccent();
 }
 
-function bindControlCenter() {
+function updateRangeReadout(field, value) {
+  if (!field) {
+    return;
+  }
+  const key = field.getAttribute("data-pref-field");
+  if (!key) {
+    return;
+  }
+  const readout = document.querySelector(`[data-range-value="${key}"]`);
+  if (!readout) {
+    return;
+  }
+
+  if (key === "glowIntensity") {
+    readout.textContent = `${Math.round(Number(value) || 0)}%`;
+    return;
+  }
+  if (key === "fontScale") {
+    readout.textContent = `${(Number(value) || 1).toFixed(2)}x`;
+    return;
+  }
+  if (key === "radius") {
+    readout.textContent = `${Math.round(Number(value) || 0)}px`;
+  }
+}
+
+function updateControlCenterScrollLock() {
+  const hasOpenModal = Boolean(document.querySelector(".modal.show"));
+  const hasOpenMenu = Boolean(document.querySelector("[data-user-menu].open"));
+  document.body.classList.toggle("modal-open", hasOpenModal || hasOpenMenu);
+}
+
+function closeControlMenu() {
+  document.querySelectorAll("[data-user-menu]").forEach((menu) => menu.classList.remove("open"));
+  document.querySelectorAll("[data-user-overlay]").forEach((overlay) => {
+    overlay.classList.remove("show");
+    overlay.classList.remove("open");
+  });
+  updateControlCenterScrollLock();
+}
+
+function openControlMenu() {
+  refreshControlCenter();
+  document.querySelectorAll("[data-user-menu]").forEach((menu) => menu.classList.add("open"));
+  document.querySelectorAll("[data-user-overlay]").forEach((overlay) => {
+    overlay.classList.add("show");
+    overlay.classList.add("open");
+  });
+  updateControlCenterScrollLock();
+}
+
+function refreshControlCenter() {
+  const session = getSession();
+  const isLoggedIn = Boolean(session && session.email);
+  const isAdmin = Boolean(session && session.role === "admin");
+  const prefs = isLoggedIn ? getAccountPrefs(session.id) : null;
+  const displayName = isLoggedIn ? (prefs.displayName || session.name || session.email) : "";
+  const initials = isLoggedIn ? getInitials(displayName, "DP") : "DP";
+
+  document.body.classList.toggle("admin-mode", isAdmin);
+
   document.querySelectorAll("[data-user-menu-trigger]").forEach((trigger) => {
-    if (trigger.dataset.bound === "1") {
+    trigger.classList.toggle("hidden", !isLoggedIn);
+  });
+  document.querySelectorAll('[data-auth-link="login"], [data-auth-link="signup"]').forEach((link) => {
+    link.classList.toggle("hidden", isLoggedIn);
+  });
+
+  document.querySelectorAll("[data-profile-avatar], [data-user-avatar]").forEach((el) => {
+    el.textContent = initials;
+  });
+
+  document.querySelectorAll("[data-profile-email]").forEach((el) => {
+    el.textContent = isLoggedIn ? displayName : "user@CYBRLY.io";
+    el.setAttribute("title", isLoggedIn && session.email ? session.email : "");
+  });
+
+  const label = isAdmin ? "Owner" : "User";
+  document.querySelectorAll(".profile-label").forEach((el) => {
+    el.textContent = isLoggedIn ? label : "Logged in";
+  });
+
+  document.querySelectorAll("[data-user-role-label]").forEach((el) => {
+    el.textContent = isAdmin ? "Owner Access" : "User Access";
+  });
+  document.querySelectorAll("[data-user-menu-title]").forEach((el) => {
+    el.textContent = isAdmin ? "Owner Control Center" : "User Dashboard";
+  });
+  document.querySelectorAll("[data-user-menu-sub]").forEach((el) => {
+    el.textContent = isAdmin
+      ? "Centralized monitoring for users, purchases, uploads, and global activity."
+      : "Track your visit stats and purchase history.";
+  });
+  document.querySelectorAll("[data-user-name]").forEach((el) => {
+    el.textContent = isLoggedIn ? displayName : "CYBRLY User";
+  });
+  document.querySelectorAll("[data-user-email]").forEach((el) => {
+    el.textContent = isLoggedIn ? session.email : "user@CYBRLY.io";
+  });
+  document.querySelectorAll("[data-user-bio]").forEach((el) => {
+    el.textContent = isLoggedIn
+      ? (prefs.bio || (isAdmin ? "System authority. Monitoring global activity." : "Neon system builder."))
+      : "Neon system builder.";
+  });
+  document.querySelectorAll("[data-user-role-badge]").forEach((el) => {
+    el.textContent = isAdmin ? "Owner" : "User";
+  });
+  document.querySelectorAll("[data-user-meta]").forEach((el) => {
+    const users = getUsers();
+    const currentUser = isLoggedIn
+      ? users.find((user) => normalizeEmail(user.email) === normalizeEmail(session.email))
+      : null;
+    const metaDate = isLoggedIn ? (session.loginAt || currentUser?.createdAt || "") : "";
+    el.textContent = metaDate ? `Last login ${new Date(metaDate).toLocaleString()}` : "Member since --";
+  });
+
+  document.querySelectorAll("[data-admin-only]").forEach((el) => {
+    el.classList.toggle("show", isAdmin);
+    el.classList.toggle("hidden", !isAdmin);
+  });
+
+  const userDashboard = document.querySelector("[data-user-dashboard]");
+  const adminDashboard = document.querySelector("[data-admin-dashboard]");
+  if (userDashboard) {
+    userDashboard.style.display = isAdmin ? "none" : "grid";
+  }
+  if (adminDashboard) {
+    adminDashboard.style.display = isAdmin ? "grid" : "none";
+  }
+
+  if (isLoggedIn && session.email) {
+    const userKey = normalizeEmail(session.email);
+    const logs = getControlCenterLogs();
+    const record = logs[userKey] || ensureControlLogRecord(userKey);
+    const sessionMs = Date.now() - controlCenterSessionStartMs;
+    const totalMs = Number(record.totalVisitMs || 0) + sessionMs;
+
+    const visitTime = document.querySelector("[data-user-visit-time]");
+    const visits = document.querySelector("[data-user-visits]");
+    const purchases = document.querySelector("[data-user-purchases]");
+    const purchaseList = document.querySelector("[data-user-purchase-list]");
+    const timeline = document.querySelector("[data-user-timeline]");
+
+    if (visitTime) {
+      visitTime.textContent = formatControlDuration(totalMs);
+    }
+    if (visits) {
+      visits.textContent = String(Number(record.visits || 0));
+    }
+    if (purchases) {
+      purchases.textContent = String(Array.isArray(record.purchases) ? record.purchases.length : 0);
+    }
+    if (purchaseList) {
+      const userPurchases = Array.isArray(record.purchases) ? record.purchases : [];
+      purchaseList.innerHTML = userPurchases.length
+        ? userPurchases.slice(0, 8).map((item) => `<div class="menu-log-item"><span>${escapeHtml(item.name || "Purchase")}</span>${escapeHtml(item.time || "--")}</div>`).join("")
+        : '<div class="menu-log-item"><span>No purchases yet</span>Start building your template vault.</div>';
+      purchaseList.classList.toggle("hidden", prefs.showPurchases === false);
+    }
+    if (timeline) {
+      const events = Array.isArray(record.timeline) ? record.timeline : [];
+      timeline.innerHTML = events.length
+        ? events.slice(0, 8).map((entry) => `<div class="menu-log-item"><span>${escapeHtml(entry.message || "Activity")}</span>${new Date(entry.time || Date.now()).toLocaleString()}</div>`).join("")
+        : '<div class="menu-log-item"><span>No activity yet</span>Events will appear here.</div>';
+      timeline.classList.toggle("hidden", prefs.showActivity === false);
+    }
+  }
+
+  if (isAdmin) {
+    const logs = getControlCenterLogs();
+    const records = Object.values(logs).filter((entry) => entry && typeof entry === "object");
+    const totalVisits = records.reduce((sum, entry) => sum + Number(entry.visits || 0), 0);
+    const totalPurchases = records.reduce((sum, entry) => sum + (Array.isArray(entry.purchases) ? entry.purchases.length : 0), 0);
+    const totalUploads = getCustomBooks().length;
+
+    const adminVisits = document.querySelector("[data-admin-visits]");
+    const adminPurchases = document.querySelector("[data-admin-purchases]");
+    const adminUploads = document.querySelector("[data-admin-uploads]");
+    const adminLogList = document.querySelector("[data-admin-log-list]");
+    if (adminVisits) {
+      adminVisits.textContent = String(totalVisits);
+    }
+    if (adminPurchases) {
+      adminPurchases.textContent = String(totalPurchases);
+    }
+    if (adminUploads) {
+      adminUploads.textContent = String(totalUploads);
+    }
+    if (adminLogList) {
+      const combined = [];
+      records.forEach((entry) => {
+        const events = Array.isArray(entry.timeline) ? entry.timeline : [];
+        combined.push(...events);
+      });
+      combined.sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
+      adminLogList.innerHTML = combined.length
+        ? combined.slice(0, 8).map((entry) => `<div class="menu-log-item"><span>${escapeHtml(entry.message || "Activity")}</span>${new Date(entry.time || Date.now()).toLocaleString()}</div>`).join("")
+        : '<div class="menu-log-item"><span>No activity yet</span>System events will appear here.</div>';
+    }
+  }
+
+  if (isLoggedIn) {
+    applyCybrlyControlPrefs(prefs);
+  } else {
+    document.body.classList.remove(
+      "layout-compact",
+      "hide-email",
+      "hide-activity",
+      "hide-purchases",
+      "profile-private",
+      "reduce-motion"
+    );
+    document.documentElement.style.fontSize = "";
+    document.documentElement.style.setProperty("--radius-xl", "24px");
+    document.documentElement.style.setProperty("--radius-lg", "18px");
+    document.documentElement.style.setProperty("--radius-md", "12px");
+    document.documentElement.style.removeProperty("--control-glow-strength");
+    document.documentElement.style.scrollBehavior = "";
+    document.body.style.scrollBehavior = "";
+    applyUserAccent();
+  }
+}
+
+function ensureControlCenterCloseButtons() {
+  document.querySelectorAll(".user-menu-header").forEach((header) => {
+    if (header.querySelector("[data-user-menu-close]")) {
       return;
     }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "menu-close";
+    button.setAttribute("aria-label", "Close control center");
+    button.setAttribute("title", "Close");
+    button.setAttribute("data-user-menu-close", "1");
+    button.innerHTML = "&times;";
+    header.appendChild(button);
+  });
+}
 
+function bindControlCenter() {
+  const trigger = document.querySelector("[data-user-menu-trigger]");
+  const menu = document.querySelector("[data-user-menu]");
+  const overlay = document.querySelector("[data-user-overlay]");
+  if (!trigger || !menu || !overlay) {
+    return;
+  }
+
+  if (trigger.dataset.bound !== "1") {
     trigger.dataset.bound = "1";
-    trigger.addEventListener("click", () => {
-      const menu = document.querySelector("[data-user-menu]");
-      if (!menu) {
-        return;
-      }
-
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       if (menu.classList.contains("open")) {
         closeControlMenu();
       } else {
         openControlMenu();
       }
     });
-  });
+  }
 
-  document.querySelectorAll("[data-user-overlay]").forEach((overlay) => {
-    if (overlay.dataset.bound === "1") {
-      return;
-    }
-
+  if (overlay.dataset.bound !== "1") {
     overlay.dataset.bound = "1";
     overlay.addEventListener("click", () => {
       closeControlMenu();
     });
-  });
+  }
 
-  document.querySelectorAll("[data-menu-account]").forEach((button) => {
+  document.querySelectorAll("[data-user-menu-close]").forEach((button) => {
     if (button.dataset.bound === "1") {
       return;
     }
-
-    button.dataset.bound = "1";
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      closeControlMenu();
-      openAccountModal();
-    });
-  });
-
-  document.querySelectorAll("[data-action='logout'], [data-menu-logout]").forEach((button) => {
-    if (button.dataset.bound === "1") {
-      return;
-    }
-
     button.dataset.bound = "1";
     button.addEventListener("click", () => {
-      clearSession();
       closeControlMenu();
-      refreshControlCenter();
-      window.location.href = "index.html";
     });
+  });
+
+  if (menu.dataset.bound !== "1") {
+    menu.dataset.bound = "1";
+    menu.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const actionEl = target.closest("[data-action]");
+      const modalEl = target.closest("[data-open-modal]");
+
+      if (actionEl) {
+        const action = actionEl.getAttribute("data-action");
+
+        if (action === "logout") {
+          clearSession();
+          closeControlMenu();
+          refreshControlCenter();
+          window.location.href = "login.html";
+          return;
+        }
+      }
+
+      if (modalEl) {
+        const modalKey = modalEl.getAttribute("data-open-modal");
+        if (modalKey === "profile-customize") {
+          showCybrlyModal("profile-customize");
+          const session = getSession();
+          if (session) {
+            const prefs = getAccountPrefs(session.id);
+            document.querySelectorAll('[data-modal="profile-customize"] [data-pref-field]').forEach((field) => {
+              const key = field.getAttribute("data-pref-field");
+              const value = prefs[key];
+              if (field instanceof HTMLInputElement && field.type === "checkbox") {
+                field.checked = Boolean(value);
+              } else if (value !== undefined && value !== null) {
+                field.value = String(value);
+              }
+              updateRangeReadout(field, value);
+            });
+            initCustomSelects();
+          }
+        }
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-theme-set]").forEach((button) => {
+    if (button.dataset.bound === "1") {
+      return;
+    }
+    button.dataset.bound = "1";
+    button.addEventListener("click", () => {
+      const session = getSession();
+      if (!session) {
+        return;
+      }
+      const theme = button.getAttribute("data-theme-set") === "light" ? "light" : "dark";
+      const prefs = getAccountPrefs(session.id);
+      const next = {
+        ...prefs,
+        theme
+      };
+      setAccountPrefs(session.id, next);
+      applyCybrlyControlPrefs(next);
+      addControlTimeline(normalizeEmail(session.email), `Theme set to ${theme}`);
+      refreshControlCenter();
+    });
+  });
+
+  document.querySelectorAll("[data-pref-toggle]").forEach((button) => {
+    if (button.dataset.bound === "1") {
+      return;
+    }
+    button.dataset.bound = "1";
+    button.addEventListener("click", () => {
+      const session = getSession();
+      if (!session) {
+        return;
+      }
+      const key = button.getAttribute("data-pref-toggle");
+      if (key !== "compact") {
+        return;
+      }
+      const prefs = getAccountPrefs(session.id);
+      const compact = !(prefs.layoutDensity === "compact" || prefs.compact);
+      const next = {
+        ...prefs,
+        compact,
+        layoutDensity: compact ? "compact" : "comfortable"
+      };
+      setAccountPrefs(session.id, next);
+      applyCybrlyControlPrefs(next);
+      addControlTimeline(normalizeEmail(session.email), `Layout switched to ${next.layoutDensity}`);
+      refreshControlCenter();
+    });
+  });
+
+  document.querySelectorAll(".modal[data-modal]").forEach((modal) => {
+    if (modal.dataset.bound === "1") {
+      return;
+    }
+    modal.dataset.bound = "1";
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        hideCybrlyModal(modal);
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-close-modal]").forEach((btn) => {
+    if (btn.dataset.bound === "1") {
+      return;
+    }
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+      hideCybrlyModal(btn.closest(".modal"));
+    });
+  });
+
+  document.querySelectorAll('[data-modal="profile-customize"] [data-pref-field]').forEach((field) => {
+    if (field.dataset.bound === "1") {
+      return;
+    }
+    field.dataset.bound = "1";
+    const eventName = (
+      (field instanceof HTMLInputElement && field.type === "checkbox")
+      || field instanceof HTMLSelectElement
+    )
+      ? "change"
+      : "input";
+    field.addEventListener(eventName, () => {
+      const session = getSession();
+      if (!session) {
+        return;
+      }
+      const key = field.getAttribute("data-pref-field");
+      if (!key) {
+        return;
+      }
+
+      const prefs = getAccountPrefs(session.id);
+      let value;
+      if (field instanceof HTMLInputElement && field.type === "checkbox") {
+        value = field.checked;
+      } else if (field instanceof HTMLInputElement && (field.type === "range" || field.type === "number")) {
+        value = Number(field.value);
+      } else {
+        value = String(field.value || "").trim();
+      }
+
+      const next = { ...prefs, [key]: value };
+      if (key === "layoutDensity") {
+        next.compact = value === "compact";
+      }
+      if (key === "compact") {
+        next.layoutDensity = value ? "compact" : "comfortable";
+      }
+      if (key === "displayName" && value) {
+        setSession({
+          ...session,
+          name: value
+        });
+      }
+      if (key === "theme") {
+        addControlTimeline(normalizeEmail(session.email), `Theme set to ${value === "light" ? "light" : "dark"}`);
+      }
+      if (key === "layoutDensity") {
+        addControlTimeline(normalizeEmail(session.email), `Layout switched to ${next.layoutDensity}`);
+      }
+
+      setAccountPrefs(session.id, next);
+      applyCybrlyControlPrefs(next);
+      refreshControlCenter();
+      updateRangeReadout(field, value);
+
+      const status = document.querySelector('[data-modal="profile-customize"] [data-customize-status]');
+      if (status) {
+        status.textContent = "Saved automatically.";
+        status.dataset.state = "success";
+      }
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (!menu.contains(target) && !trigger.contains(target)) {
+      closeControlMenu();
+    }
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeControlMenu();
+      document.querySelectorAll(".modal.show").forEach((modal) => hideCybrlyModal(modal));
     }
   });
 }
@@ -1245,7 +1966,8 @@ async function initSignupForm() {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      loginAt: new Date().toISOString()
     });
 
     refreshControlCenter();
@@ -1295,14 +2017,15 @@ async function initLoginForm() {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role || "user"
+      role: user.role || "user",
+      loginAt: new Date().toISOString()
     });
 
     refreshControlCenter();
     setStatus(status, "Login successful. Redirecting...", false);
 
     window.setTimeout(() => {
-      window.location.href = user.role === "admin" ? "admin.html" : "index.html";
+      window.location.href = user.role === "admin" ? "dashboard.html" : "index.html";
     }, 650);
   });
 }
@@ -1326,6 +2049,236 @@ function renderAdminUploadedBooks() {
   hydrateCovers(root);
 }
 
+function getControlCenterSummary() {
+  const logs = getControlCenterLogs();
+  const entries = Object.entries(logs).filter((entry) => entry[1] && typeof entry[1] === "object");
+
+  const users = entries.map(([email, record]) => {
+    const purchases = Array.isArray(record.purchases) ? record.purchases : [];
+    const timeline = Array.isArray(record.timeline) ? record.timeline : [];
+    const totalVisitMs = Number(record.totalVisitMs || 0);
+    const visits = Number(record.visits || 0);
+    const lastVisit = record.lastVisitAt || "";
+
+    const events = [
+      ...timeline
+        .filter((event) => event && typeof event === "object")
+        .map((event) => ({
+          email,
+          message: String(event.message || "Activity"),
+          time: event.time || "",
+          type: "activity"
+        })),
+      ...purchases
+        .filter((purchase) => purchase && typeof purchase === "object")
+        .map((purchase) => ({
+          email,
+          message: `Purchase: ${purchase.name || "Book"}`,
+          time: purchase.time || "",
+          type: "purchase"
+        }))
+    ];
+
+    return {
+      email,
+      visits,
+      totalVisitMs,
+      purchases,
+      timeline,
+      events,
+      lastVisit
+    };
+  });
+
+  const totalUsers = users.length;
+  const totalVisits = users.reduce((sum, user) => sum + user.visits, 0);
+  const totalPurchases = users.reduce((sum, user) => sum + user.purchases.length, 0);
+  const totalVisitMs = users.reduce((sum, user) => sum + user.totalVisitMs, 0);
+  const totalUploads = getCustomBooks().length;
+  const totalBooks = getAllBooks().length;
+  const totalFeatured = getAllBooks().filter((book) => Boolean(book.featured)).length;
+
+  const globalEvents = users
+    .flatMap((user) => user.events)
+    .sort((left, right) => new Date(right.time || 0).getTime() - new Date(left.time || 0).getTime());
+
+  return {
+    users,
+    globalEvents,
+    totals: {
+      totalUsers,
+      totalVisits,
+      totalPurchases,
+      totalVisitMs,
+      totalUploads,
+      totalBooks,
+      totalFeatured
+    }
+  };
+}
+
+function initDashboardPage() {
+  const panel = document.getElementById("dashboard-panel");
+  if (!panel) {
+    return;
+  }
+
+  const guard = document.getElementById("dashboard-guard");
+  const session = getSession();
+  const isAdmin = Boolean(session && session.role === "admin");
+
+  if (!isAdmin) {
+    panel.classList.add("hidden");
+    guard?.classList.remove("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  guard?.classList.add("hidden");
+
+  const summary = getControlCenterSummary();
+  const totals = summary.totals;
+
+  const statMap = {
+    "dash-total-users": String(totals.totalUsers),
+    "dash-total-books": String(totals.totalBooks),
+    "dash-total-featured": String(totals.totalFeatured),
+    "dash-total-visits": String(totals.totalVisits),
+    "dash-total-purchases": String(totals.totalPurchases),
+    "dash-total-time": formatControlDuration(totals.totalVisitMs),
+    "dash-total-uploads": String(totals.totalUploads)
+  };
+
+  Object.entries(statMap).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = value;
+    }
+  });
+
+  const userSnapshot = document.getElementById("dash-user-snapshot");
+  if (userSnapshot) {
+    const sortedUsers = [...summary.users].sort((left, right) => right.visits - left.visits);
+    userSnapshot.innerHTML = sortedUsers.length
+      ? sortedUsers.slice(0, 8).map((user) => `
+          <div class="menu-log-item">
+            <span>${escapeHtml(user.email)}</span>
+            Visits: ${user.visits} · Purchases: ${user.purchases.length} · Time: ${formatControlDuration(user.totalVisitMs)}
+          </div>
+        `).join("")
+      : '<div class="menu-log-item"><span>No user logs yet</span>Activity will appear here.</div>';
+  }
+
+  const globalActivity = document.getElementById("dash-global-activity");
+  if (globalActivity) {
+    globalActivity.innerHTML = summary.globalEvents.length
+      ? summary.globalEvents.slice(0, 14).map((event) => `
+          <div class="menu-log-item">
+            <span>${escapeHtml(event.email)} · ${escapeHtml(event.message)}</span>
+            ${new Date(event.time || Date.now()).toLocaleString()}
+          </div>
+        `).join("")
+      : '<div class="menu-log-item"><span>No events yet</span>Global activity will appear here.</div>';
+  }
+
+  const recentUploads = document.getElementById("dash-recent-uploads");
+  if (recentUploads) {
+    const uploads = getCustomBooks()
+      .slice()
+      .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+
+    recentUploads.innerHTML = uploads.length
+      ? uploads.slice(0, 10).map((book) => `
+          <div class="menu-log-item">
+            <span>${escapeHtml(book.title)} · ${escapeHtml(book.author)}</span>
+            ${new Date(book.createdAt || Date.now()).toLocaleString()} · ${escapeHtml(book.category || "Category")}
+          </div>
+        `).join("")
+      : '<div class="menu-log-item"><span>No uploads yet</span>Uploaded books will appear here.</div>';
+  }
+}
+
+function initLogsPage() {
+  const panel = document.getElementById("logs-panel");
+  if (!panel) {
+    return;
+  }
+
+  const guard = document.getElementById("logs-guard");
+  const session = getSession();
+  const isAdmin = Boolean(session && session.role === "admin");
+
+  if (!isAdmin) {
+    panel.classList.add("hidden");
+    guard?.classList.remove("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  guard?.classList.add("hidden");
+
+  const summary = getControlCenterSummary();
+  const totals = summary.totals;
+
+  const totalUsers = document.getElementById("logs-total-users");
+  const totalEvents = document.getElementById("logs-total-events");
+  const totalVisits = document.getElementById("logs-total-visits");
+  const totalPurchases = document.getElementById("logs-total-purchases");
+
+  if (totalUsers) {
+    totalUsers.textContent = String(totals.totalUsers);
+  }
+  if (totalEvents) {
+    totalEvents.textContent = String(summary.globalEvents.length);
+  }
+  if (totalVisits) {
+    totalVisits.textContent = String(totals.totalVisits);
+  }
+  if (totalPurchases) {
+    totalPurchases.textContent = String(totals.totalPurchases);
+  }
+
+  const usersRoot = document.getElementById("logs-user-grid");
+  if (usersRoot) {
+    const sortedUsers = [...summary.users].sort((left, right) => {
+      const leftTime = new Date(left.lastVisit || 0).getTime();
+      const rightTime = new Date(right.lastVisit || 0).getTime();
+      return rightTime - leftTime;
+    });
+
+    usersRoot.innerHTML = sortedUsers.length
+      ? sortedUsers.map((user) => `
+          <article class="soft-panel">
+            <h3 style="margin-top:0;">${escapeHtml(user.email)}</h3>
+            <p class="info-text">Visits: ${user.visits} · Purchases: ${user.purchases.length} · Total Time: ${formatControlDuration(user.totalVisitMs)}</p>
+            <div class="menu-log">
+              ${user.events.length
+                ? user.events.map((event) => `
+                    <div class="menu-log-item">
+                      <span>${escapeHtml(event.message)}</span>
+                      ${new Date(event.time || Date.now()).toLocaleString()}
+                    </div>
+                  `).join("")
+                : '<div class="menu-log-item"><span>No logs for this user</span>Waiting for activity.</div>'}
+            </div>
+          </article>
+        `).join("")
+      : '<article class="soft-panel"><p class="info-text">No logs captured yet.</p></article>';
+  }
+
+  const globalRoot = document.getElementById("logs-global-list");
+  if (globalRoot) {
+    globalRoot.innerHTML = summary.globalEvents.length
+      ? summary.globalEvents.map((event) => `
+          <div class="menu-log-item">
+            <span>${escapeHtml(event.email)} · ${escapeHtml(event.message)}</span>
+            ${new Date(event.time || Date.now()).toLocaleString()}
+          </div>
+        `).join("")
+      : '<div class="menu-log-item"><span>No global events yet</span>System-wide logs will appear here.</div>';
+  }
+}
+
 function initAdminPage() {
   const panel = document.getElementById("admin-panel");
   if (!panel) {
@@ -1335,6 +2288,14 @@ function initAdminPage() {
   const guard = document.getElementById("admin-guard");
   const session = getSession();
   const isAdmin = Boolean(session && session.role === "admin");
+  const adminKey = session && session.email ? normalizeEmail(session.email) : "";
+
+  const logAdminEvent = (message) => {
+    if (!adminKey) {
+      return;
+    }
+    addControlTimeline(adminKey, message);
+  };
 
   if (!isAdmin) {
     panel.classList.add("hidden");
@@ -1367,12 +2328,17 @@ function initAdminPage() {
       const deleteBtn = target.closest("[data-delete-book]");
       if (deleteBtn) {
         const id = decodeURIComponent(deleteBtn.getAttribute("data-delete-book") || "");
-        const next = getCustomBooks().filter((book) => book.id !== id);
+        const books = getCustomBooks();
+        const deletedBook = books.find((book) => book.id === id);
+        const next = books.filter((book) => book.id !== id);
         saveCustomBooks(next);
         renderAdminUploadedBooks();
         renderHomeCategories();
         renderBooksPageCategories();
         renderCategoryPage();
+        if (deletedBook) {
+          logAdminEvent(`Deleted book ${deletedBook.title}`);
+        }
         setStatus(status, "Book removed.", false);
         return;
       }
@@ -1395,6 +2361,10 @@ function initAdminPage() {
         renderHomeCategories();
         renderBooksPageCategories();
         renderCategoryPage();
+        const updatedBook = next.find((book) => book.id === id);
+        if (updatedBook) {
+          logAdminEvent(`${updatedBook.featured ? "Marked featured" : "Unmarked featured"}: ${updatedBook.title}`);
+        }
         setStatus(status, "Featured status updated.", false);
       }
     });
@@ -1484,6 +2454,7 @@ function initAdminPage() {
     renderHomeCategories();
     renderBooksPageCategories();
     renderCategoryPage();
+    logAdminEvent(`Uploaded book ${title}`);
 
     setStatus(status, "Book uploaded successfully.", false);
   });
@@ -1512,11 +2483,20 @@ function initPageLoader() {
 async function initialize() {
   await ensureAdminSeed();
   initPageLoader();
+  ensureCybrlyProfileCustomizeModal();
+  ensureControlCenterCloseButtons();
   initThemeToggle();
-  initAccountCustomizationModal();
+  ensureHeaderScrollIndicator();
   initCustomSelects();
 
   bindControlCenter();
+  registerControlCenterVisit();
+  if (document.body.dataset.controlTimeBound !== "1") {
+    document.body.dataset.controlTimeBound = "1";
+    window.addEventListener("beforeunload", () => {
+      persistControlCenterSessionTime();
+    });
+  }
   refreshControlCenter();
   initSocialLinks();
 
@@ -1528,6 +2508,8 @@ async function initialize() {
   initContactForm();
   await initSignupForm();
   await initLoginForm();
+  initDashboardPage();
+  initLogsPage();
   initAdminPage();
 }
 

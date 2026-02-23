@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Register | e-Zone</title>
-  <meta name="description" content="Register a user account on e-Zone.">
+  <title>Dashboard | e-Zone</title>
+  <meta name="description" content="Admin control dashboard for e-Zone.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,7 @@
   <div class="page-loader" data-page-loader>
     <div class="loader-shell">
       <div class="loader-ring"></div>
-      <p>Loading registration gateway...</p>
+      <p>Loading owner dashboard...</p>
     </div>
   </div>
 
@@ -128,37 +128,56 @@
   </div>
 
   <main>
-    <section class="section container" style="max-width:540px;">
-      <article class="form-card">
-        <span class="section-label">User Registration</span>
-        <h2>Create an e-Zone account</h2>
-        <p class="info-text">Admin account creation is disabled in registration.</p>
-
-        <form id="signup-form" novalidate>
-          <div class="field">
-            <label for="signup-name">Full Name</label>
-            <input class="input" id="signup-name" name="name" type="text" required>
-          </div>
-
-          <div class="field">
-            <label for="signup-email">Email</label>
-            <input class="input" id="signup-email" name="email" type="email" required>
-          </div>
-
-          <div class="field">
-            <label for="signup-password">Password</label>
-            <input class="input" id="signup-password" name="password" type="password" minlength="8" required>
-          </div>
-
-          <div class="field">
-            <label for="signup-confirm">Confirm Password</label>
-            <input class="input" id="signup-confirm" name="confirmPassword" type="password" minlength="8" required>
-          </div>
-
-          <button class="btn btn-primary" type="submit">Register</button>
-          <p id="signup-status" class="status" aria-live="polite"></p>
-        </form>
+    <section class="section container">
+      <article id="dashboard-guard" class="soft-panel">
+        <h2>Admin Access Required</h2>
+        <p class="info-text">Only admin can open the full dashboard overview.</p>
+        <div class="actions" style="margin-top:0.65rem;">
+          <a class="btn btn-primary" href="login.html">Go to Login</a>
+        </div>
       </article>
+
+      <section id="dashboard-panel" class="hidden">
+        <div class="section-header">
+          <div>
+            <span class="section-label">Owner Dashboard</span>
+            <h2>System Overview</h2>
+            <p>Central overview of users, visits, purchases, uploads, and recent activity.</p>
+          </div>
+          <div class="actions">
+            <a class="btn btn-ghost" href="logs.html">Open Logs</a>
+            <a class="btn btn-primary" href="admin.html">Upload Books</a>
+          </div>
+        </div>
+
+        <div class="cards-grid">
+          <article class="soft-panel"><h3>Total Users</h3><p class="book-price" id="dash-total-users">0</p></article>
+          <article class="soft-panel"><h3>Total Books</h3><p class="book-price" id="dash-total-books">0</p></article>
+          <article class="soft-panel"><h3>Featured Books</h3><p class="book-price" id="dash-total-featured">0</p></article>
+          <article class="soft-panel"><h3>Total Visits</h3><p class="book-price" id="dash-total-visits">0</p></article>
+          <article class="soft-panel"><h3>Total Purchases</h3><p class="book-price" id="dash-total-purchases">0</p></article>
+          <article class="soft-panel"><h3>Total Visit Time</h3><p class="book-price" id="dash-total-time">0m</p></article>
+          <article class="soft-panel"><h3>Total Uploads</h3><p class="book-price" id="dash-total-uploads">0</p></article>
+        </div>
+
+        <section class="section" style="padding-inline:0;">
+          <div class="cards-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+            <article class="soft-panel">
+              <h3>User Snapshot</h3>
+              <div class="menu-log" id="dash-user-snapshot"></div>
+            </article>
+            <article class="soft-panel">
+              <h3>Recent Uploads</h3>
+              <div class="menu-log" id="dash-recent-uploads"></div>
+            </article>
+          </div>
+        </section>
+
+        <article class="soft-panel">
+          <h3>Global Activity Feed</h3>
+          <div class="menu-log" id="dash-global-activity"></div>
+        </article>
+      </section>
     </section>
   </main>
 
@@ -193,8 +212,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-
-
-
-
-

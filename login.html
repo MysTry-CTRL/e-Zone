@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login | e-Zone</title>
   <meta name="description" content="Login to e-Zone.">
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Chewy&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="loading-active">
@@ -37,38 +37,93 @@
         <a class="nav-link" href="contact.html">Contact</a>
       </nav>
       <div class="nav-actions control-center">
-        <button class="profile-trigger" type="button" data-user-menu-trigger>
-          <span class="profile-avatar" data-profile-avatar>CC</span>
-          <span class="profile-meta">
-            <span class="profile-label">Control Center</span>
-            <span class="profile-email" data-profile-email>Open account panel</span>
-          </span>
-        </button>
-      </div>
+  <button class="profile-trigger hidden" type="button" data-user-menu-trigger>
+    <span class="profile-avatar" data-profile-avatar>DP</span>
+    <span class="profile-meta">
+      <span class="profile-label">Logged in</span>
+      <span class="profile-email" data-profile-email>user@CYBRLY.io</span>
+    </span>
+  </button>
+  <a class="btn btn-ghost" href="login.html" data-auth-link="login">Login</a>
+  <a class="btn btn-primary" href="signup.html" data-auth-link="signup">Sign Up</a>
+</div>
     </div>
   </header>
 
   <div class="user-menu-overlay" data-user-overlay></div>
   <div class="user-menu glass" data-user-menu>
     <div class="user-menu-header">
-      <p class="eyebrow user-menu-role" data-user-role-label>Account Access</p>
-      <h3 class="user-menu-title" data-user-menu-title>Access Control Center</h3>
-      <p class="user-menu-sub" data-user-menu-sub>Login or register to unlock account controls.</p>
+      <p class="eyebrow user-menu-role" data-user-role-label>User Access</p>
+      <h3 class="user-menu-title" data-user-menu-title>User Dashboard</h3>
+      <p class="user-menu-sub" data-user-menu-sub>Track your personal activity logs and settings.</p>
+      <button class="menu-close" type="button" data-user-menu-close aria-label="Close control center" title="Close">&times;</button>
     </div>
     <div class="user-menu-info">
-      <span class="profile-avatar" data-user-avatar>CC</span>
-      <div>
-        <p class="profile-name" data-user-name>Not Signed In</p>
-        <p class="profile-email" data-user-email>Use Login / Register</p>
-        <span class="role-badge" data-user-role-badge>Visitor</span>
-      </div>
+  <span class="profile-avatar" data-user-avatar>DP</span>
+  <div>
+    <p class="profile-name" data-user-name>CYBRLY User</p>
+    <p class="profile-email" data-user-email>user@CYBRLY.io</p>
+    <p class="profile-bio" data-user-bio>Neon system builder.</p>
+    <div class="profile-meta-row">
+      <span class="role-badge" data-user-role-badge>User</span>
+      <span class="profile-time" data-user-meta>Member since --</span>
     </div>
-    <div class="user-menu-actions">
-      <a class="btn btn-ghost" href="login.html" data-menu-login>Login</a>
-      <a class="btn btn-primary" href="signup.html" data-menu-signup>Register</a>
-      <a class="btn btn-ghost hidden" href="books.html" data-menu-account>My Account</a>
-      <a class="btn btn-ghost hidden" href="admin.html" data-menu-admin>Admin Dashboard</a>
-      <button class="btn btn-danger-action hidden" type="button" data-menu-logout data-action="logout">Logout</button>
+  </div>
+</div>
+<div class="user-menu-actions">
+  <button class="btn btn-ghost" type="button" data-open-modal="profile-customize">Customize Profile</button>
+  <a class="btn btn-ghost" href="dashboard.html" data-admin-only>Dashboard</a>
+  <a class="btn btn-ghost" href="logs.html" data-admin-only>Logs</a>
+  <a class="btn btn-ghost" href="admin.html" data-admin-only>Upload Books</a>
+  <button class="btn btn-danger-action" type="button" data-action="logout">Logout</button>
+</div>
+    <div class="user-menu-section" data-user-dashboard>
+      <div class="menu-stat">
+        <span>Total Visit Time</span>
+        <strong data-user-visit-time>0m</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Number of Visits</span>
+        <strong data-user-visits>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Purchase History</span>
+        <strong data-user-purchases>0</strong>
+      </div>
+      <div class="menu-log" data-user-purchase-list></div>
+      <h4>Activity Timeline</h4>
+      <div class="menu-log" data-user-timeline></div>
+    </div>
+    <div class="user-menu-section" data-admin-dashboard>
+      <div class="menu-stat">
+        <span>Total User Visits</span>
+        <strong data-admin-visits>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Total Purchases</span>
+        <strong data-admin-purchases>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Total Uploads</span>
+        <strong data-admin-uploads>0</strong>
+      </div>
+      <h4>Global Activity Timeline</h4>
+      <div class="menu-log" data-admin-log-list></div>
+    </div>
+    <div class="user-menu-section" data-customization>
+      <h4>Customization</h4>
+      <p>Adjust theme and layout density. More options will unlock over time.</p>
+      <div class="customization-grid">
+        <button class="btn btn-ghost" type="button" data-theme-set="light">
+          Switch to Light Mode
+          <span class="theme-note">Not recommended</span>
+        </button>
+        <button class="btn btn-ghost" type="button" data-theme-set="dark">
+          Switch to Dark Mode
+          <span class="theme-note">Recommended</span>
+        </button>
+        <button class="btn btn-ghost" type="button" data-pref-toggle="compact">Toggle Compact Layout</button>
+      </div>
     </div>
   </div>
 
@@ -132,3 +187,9 @@
   <script src="script.js"></script>
 </body>
 </html>
+
+
+
+
+
+
