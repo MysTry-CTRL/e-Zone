@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Category | e-Zone</title>
+  <meta name="description" content="Category-wise ebook listings for e-Zone.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chewy&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="loading-active">
+  <div class="page-loader" data-page-loader>
+    <div class="loader-shell">
+      <div class="loader-ring"></div>
+      <p>Loading category library...</p>
+    </div>
+  </div>
+
+  <div class="bg-grid"></div>
+  <div class="bg-blob blob-a"></div>
+  <div class="bg-blob blob-b"></div>
+  <div class="bg-blob blob-c"></div>
+
+  <header class="site-header glass">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html" aria-label="e-Zone home">
+        <span class="brand-icon" aria-hidden="true"></span>
+        <h1 class="site-title">e-Zone</h1>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link active" href="books.html">Books</a>
+        <a class="nav-link" href="about.html">About</a>
+        <a class="nav-link" href="contact.html">Contact</a>
+      </nav>
+      <div class="nav-actions control-center">
+        <button class="profile-trigger" type="button" data-user-menu-trigger>
+          <span class="profile-avatar" data-profile-avatar>CC</span>
+          <span class="profile-meta">
+            <span class="profile-label">Control Center</span>
+            <span class="profile-email" data-profile-email>Open account panel</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="user-menu-overlay" data-user-overlay></div>
+  <div class="user-menu glass" data-user-menu>
+    <div class="user-menu-header">
+      <p class="eyebrow user-menu-role" data-user-role-label>Account Access</p>
+      <h3 class="user-menu-title" data-user-menu-title>Access Control Center</h3>
+      <p class="user-menu-sub" data-user-menu-sub>Login or register to unlock account controls.</p>
+    </div>
+    <div class="user-menu-info">
+      <span class="profile-avatar" data-user-avatar>CC</span>
+      <div>
+        <p class="profile-name" data-user-name>Not Signed In</p>
+        <p class="profile-email" data-user-email>Use Login / Register</p>
+        <span class="role-badge" data-user-role-badge>Visitor</span>
+      </div>
+    </div>
+    <div class="user-menu-actions">
+      <a class="btn btn-ghost" href="login.html" data-menu-login>Login</a>
+      <a class="btn btn-primary" href="signup.html" data-menu-signup>Register</a>
+      <a class="btn btn-ghost hidden" href="books.html" data-menu-account>My Account</a>
+      <a class="btn btn-ghost hidden" href="admin.html" data-menu-admin>Admin Dashboard</a>
+      <button class="btn btn-danger-action hidden" type="button" data-menu-logout data-action="logout">Logout</button>
+    </div>
+  </div>
+
+  <main>
+    <section class="section container">
+      <div class="section-header">
+        <div>
+          <span class="section-label">Category View</span>
+          <h2 id="category-page-title">Category Books</h2>
+          <p>Full list of books in the selected category.</p>
+        </div>
+        <a class="btn btn-ghost" href="books.html">Back to Books</a>
+      </div>
+      <div id="category-books-grid" class="cards-grid"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <h3 class="footer-title">e-Zone</h3>
+        <p class="footer-text">Playful futuristic ebook platform for Bangla and English readers.</p>
+      </div>
+      <div>
+        <h4 class="footer-title">Quick Links</h4>
+        <div class="footer-links">
+          <a href="index.html">Home</a>
+          <a href="books.html">Books</a>
+          <a href="about.html">About</a>
+          <a href="contact.html">Contact</a>
+        </div>
+      </div>
+      <div>
+        <h4 class="footer-title">Social</h4>
+        <div class="footer-links">
+          <a href="https://youtube.com/@MysTryReyal" target="_blank" rel="noopener">YouTube</a>
+          <a href="https://www.instagram.com/am_i_bisashable_/" target="_blank" rel="noopener">Instagram</a>
+        </div>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 e-Zone. All Rights Reserved.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
