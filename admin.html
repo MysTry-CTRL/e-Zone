@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="darkreader-lock">
   <title>Upload Books | e-Zone</title>
-  <meta name="description" content="Admin upload page and feature controls for e-Zone.">
+  <meta name="description" content="Owner upload page and feature controls for e-Zone.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -110,28 +111,13 @@
       <h4>Global Activity Timeline</h4>
       <div class="menu-log" data-admin-log-list></div>
     </div>
-    <div class="user-menu-section" data-customization>
-      <h4>Customization</h4>
-      <p>Adjust theme and layout density. More options will unlock over time.</p>
-      <div class="customization-grid">
-        <button class="btn btn-ghost" type="button" data-theme-set="light">
-          Switch to Light Mode
-          <span class="theme-note">Not recommended</span>
-        </button>
-        <button class="btn btn-ghost" type="button" data-theme-set="dark">
-          Switch to Dark Mode
-          <span class="theme-note">Recommended</span>
-        </button>
-        <button class="btn btn-ghost" type="button" data-pref-toggle="compact">Toggle Compact Layout</button>
-      </div>
-    </div>
   </div>
 
   <main>
     <section class="section container">
       <article id="admin-guard" class="soft-panel">
-        <h2>Admin Access Required</h2>
-        <p class="info-text">Login with the fixed admin credentials to access book upload and feature controls.</p>
+        <h2>Owner Access Required</h2>
+        <p class="info-text">Login with the fixed owner credentials to access book upload and feature controls.</p>
         <div class="actions" style="margin-top:0.65rem;">
           <a class="btn btn-primary" href="login.html">Go to Login</a>
         </div>
@@ -188,13 +174,19 @@
 
             <div class="field">
               <label for="book-cover-pdf">Cover PDF File *</label>
-              <input class="file-input" id="book-cover-pdf" name="coverPdf" type="file" accept="application/pdf,.pdf" required>
+              <input class="file-input" id="book-cover-pdf" name="coverPdf" type="file" accept="application/pdf,.pdf" data-file-label="Choose Cover PDF" data-file-placeholder="No cover PDF selected" required>
             </div>
 
             <div class="field">
-              <label for="book-main-pdf">Main Book PDF File *</label>
-              <input class="file-input" id="book-main-pdf" name="bookPdf" type="file" accept="application/pdf,.pdf" required>
+              <label for="book-link">Rokomari Book Link (optional)</label>
+              <input class="input" id="book-link" name="bookLink" type="url" placeholder="https://www.rokomari.com/book/...">
             </div>
+
+            <div class="field">
+              <label for="book-qr-image">QR Code Image (optional)</label>
+              <input class="file-input" id="book-qr-image" name="qrImage" type="file" accept="image/*,.png,.jpg,.jpeg,.webp" data-file-label="Choose QR Image" data-file-placeholder="No QR image selected">
+            </div>
+            <p class="info-text">At least one is required: Rokomari link or QR code image. You can provide both.</p>
 
             <label class="checkbox-row">
               <input type="checkbox" name="featured">
@@ -209,17 +201,18 @@
             <h3>Rules Applied</h3>
             <ul class="purchase-steps">
               <li>Cover file must be a PDF.</li>
-              <li>Main book file must be a PDF.</li>
-              <li>Description is optional; all other fields required.</li>
+              <li>Book source is Rokomari link and/or QR code image.</li>
+              <li>At least one source (link or QR) is mandatory.</li>
+              <li>Description is optional; all other core fields required.</li>
               <li>You can mark/unmark featured status after upload.</li>
             </ul>
             <div class="notice" style="margin-top:0.75rem;">
-              Login/registration cannot create admin credentials. Admin is fixed in system seed.
+              Login/registration cannot create owner credentials. Owner is fixed in system seed.
             </div>
 
             <div class="panel-divider"></div>
             <h3>Cloud Storage Integration</h3>
-            <p class="info-text">Optional Cloudinary integration for storing uploaded PDF files in cloud storage.</p>
+            <p class="info-text">Optional Cloudinary integration for storing uploaded cover PDFs and QR images in cloud storage.</p>
             <form id="cloud-config-form" class="cloud-config-form" novalidate>
               <label class="checkbox-row">
                 <input type="checkbox" name="enabled">
@@ -287,6 +280,8 @@
   <script src="script.js"></script>
 </body>
 </html>
+
+
 
 
 

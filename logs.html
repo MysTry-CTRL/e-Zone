@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="darkreader-lock">
   <title>Logs | e-Zone</title>
-  <meta name="description" content="Global activity logs for e-Zone admin.">
+  <meta name="description" content="Global activity logs for e-Zone owner.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -110,28 +111,13 @@
       <h4>Global Activity Timeline</h4>
       <div class="menu-log" data-admin-log-list></div>
     </div>
-    <div class="user-menu-section" data-customization>
-      <h4>Customization</h4>
-      <p>Adjust theme and layout density. More options will unlock over time.</p>
-      <div class="customization-grid">
-        <button class="btn btn-ghost" type="button" data-theme-set="light">
-          Switch to Light Mode
-          <span class="theme-note">Not recommended</span>
-        </button>
-        <button class="btn btn-ghost" type="button" data-theme-set="dark">
-          Switch to Dark Mode
-          <span class="theme-note">Recommended</span>
-        </button>
-        <button class="btn btn-ghost" type="button" data-pref-toggle="compact">Toggle Compact Layout</button>
-      </div>
-    </div>
   </div>
 
   <main>
     <section class="section container">
       <article id="logs-guard" class="soft-panel">
-        <h2>Admin Access Required</h2>
-        <p class="info-text">Only admin can view all user logs.</p>
+        <h2>Owner Access Required</h2>
+        <p class="info-text">Only owner can view all user logs.</p>
         <div class="actions" style="margin-top:0.65rem;">
           <a class="btn btn-primary" href="login.html">Go to Login</a>
         </div>
@@ -206,3 +192,5 @@
   <script src="script.js"></script>
 </body>
 </html>
+
+
