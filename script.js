@@ -31,8 +31,8 @@ function normalizeRole(role) {
 const CATEGORIES = [
   "Love and Romance",
   "Fiction",
-  "Non-fiction",
-  "Science Fiction"
+  "Biography",
+  "Science and Tech"
 ];
 
 const CATEGORY_SLUGS = Object.fromEntries(
@@ -1664,12 +1664,12 @@ function detectCategoryFromQuery(queryLower) {
       words: ["fiction", "novel", "story"]
     },
     {
-      category: "Non-fiction",
-      words: ["non-fiction", "nonfiction", "self help", "biography", "history"]
+      category: "Biography",
+      words: ["biography", "biography", "self help", "biography", "history"]
     },
     {
-      category: "Science Fiction",
-      words: ["science fiction", "sci-fi", "scifi", "space", "future"]
+      category: "Science and Tech",
+      words: ["science and tech", "sci-fi", "scifi", "space", "future"]
     }
   ];
 
