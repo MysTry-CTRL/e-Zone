@@ -13,11 +13,14 @@ const STORAGE_KEYS = {
 };
 
 const ADMIN_ACCOUNT = {
-  name: "e-Zone Owner",
-  email: "abirxxdbrine2024@gmail.com",
-  password: "6769#6967",
+  name: "Alex",
+  email: "admin",
+  password: "adminpass",
   role: "owner"
 };
+
+const API_BASE_URL = "/api";
+const API_TIMEOUT_MS = 16000;
 
 function isOwnerRole(role) {
   const normalized = String(role || "").trim().toLowerCase();
@@ -70,6 +73,125 @@ function escapeHtml(value) {
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function getSessionToken() {
+  const session = getSession();
+  const token = session && session.token ? String(session.token).trim() : "";
+  return token;
+}
+
+function mapApiUserToSession(user, tokenOverride = "") {
+  const source = user && typeof user === "object" ? user : {};
+  const username = String(source.username || source.email || "").trim();
+  const safeRole = normalizeRole(source.role);
+  const name = String(source.displayName || source.name || username || "Reader").trim();
+  const token = String(tokenOverride || getSessionToken() || "").trim();
+
+  return {
+    id: String(source.id || ""),
+    name,
+    email: username,
+    username,
+    role: safeRole,
+    token,
+    loginAt: new Date().toISOString()
+  };
+}
+
+async function apiRequest(path, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  const headers = {
+    Accept: "application/json",
+    ...(options.headers && typeof options.headers === "object" ? options.headers : {})
+  };
+
+  const token = String(
+    options.token
+    || (options.auth === false ? "" : getSessionToken())
+  ).trim();
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const init = {
+    method,
+    headers
+  };
+
+  if (Object.prototype.hasOwnProperty.call(options, "body")) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(options.body);
+  }
+
+  const controller = "AbortController" in window ? new AbortController() : null;
+  const timeout = window.setTimeout(() => {
+    if (controller) {
+      controller.abort();
+    }
+  }, Number(options.timeoutMs || API_TIMEOUT_MS));
+
+  if (controller) {
+    init.signal = controller.signal;
+  }
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, init);
+  } catch (error) {
+    window.clearTimeout(timeout);
+    throw new Error("Cannot reach API server. Start the local JSON server first.");
+  }
+  window.clearTimeout(timeout);
+
+  const raw = await response.text();
+  let payload = {};
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch (error) {
+      payload = {};
+    }
+  }
+
+  if (!response.ok) {
+    const message = String(payload && payload.message ? payload.message : `Request failed (${response.status})`);
+    const wrapped = new Error(message);
+    wrapped.status = response.status;
+    wrapped.payload = payload;
+    throw wrapped;
+  }
+
+  return payload;
+}
+
+async function syncSessionFromApi() {
+  const session = getSession();
+  const token = session && session.token ? String(session.token).trim() : "";
+  if (!session) {
+    return;
+  }
+
+  if (!token) {
+    clearSession();
+    return;
+  }
+
+  try {
+    const payload = await apiRequest("/auth/me", {
+      method: "GET",
+      token
+    });
+    if (!payload || !payload.user) {
+      throw new Error("Session unavailable");
+    }
+    const mapped = mapApiUserToSession(payload.user, token);
+    mapped.loginAt = session.loginAt || mapped.loginAt;
+    setSession(mapped);
+  } catch (error) {
+    clearSession();
+  }
 }
 
 function formatPrice(price) {
@@ -701,34 +823,7 @@ function readFileAsDataUrl(file) {
 }
 
 async function ensureAdminSeed() {
-  const users = getUsers();
-  const adminEmail = normalizeEmail(ADMIN_ACCOUNT.email);
-  const passHash = await hashPassword(ADMIN_ACCOUNT.password);
-  const index = users.findIndex((user) => normalizeEmail(user.email) === adminEmail);
-
-  if (index >= 0) {
-    const current = users[index] || {};
-    users[index] = {
-      ...current,
-      name: ADMIN_ACCOUNT.name,
-      email: ADMIN_ACCOUNT.email,
-      passHash,
-      role: "owner",
-      createdAt: current.createdAt || new Date().toISOString()
-    };
-    saveUsers(users);
-    return;
-  }
-
-  users.push({
-    id: createId("user"),
-    name: ADMIN_ACCOUNT.name,
-    email: ADMIN_ACCOUNT.email,
-    passHash,
-    role: "owner",
-    createdAt: new Date().toISOString()
-  });
-  saveUsers(users);
+  // Owner user is seeded by the JSON API backend.
 }
 
 function getInitials(name, fallback = "EZ") {
@@ -784,8 +879,7 @@ function applyUserAccent() {
 }
 
 function getPreferredTheme() {
-  // Ignore browser/system auto color preference.
-  return "dark";
+  return "light";
 }
 
 function getStoredTheme() {
@@ -808,9 +902,16 @@ function ensureNavThemeToggle() {
 
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "theme-toggle-circle";
+    button.className = "theme-toggle-pill";
     button.setAttribute("data-theme-toggle", "1");
-    button.innerHTML = `<span class="theme-icon" aria-hidden="true">${themeIconSvg("sun")}</span>`;
+    button.innerHTML = `
+      <span class="theme-pill-track" aria-hidden="true">
+        <span class="theme-pill-icon sun">${themeIconSvg("sun")}</span>
+        <span class="theme-pill-icon moon">${themeIconSvg("moon")}</span>
+        <span class="theme-pill-knob"></span>
+      </span>
+      <span class="theme-pill-label" data-theme-pill-label>Light</span>
+    `;
 
     const contact = Array.from(nav.querySelectorAll("a.nav-link")).find((link) => {
       return String(link.textContent || "").trim().toLowerCase() === "contact";
@@ -837,20 +938,26 @@ function ensureNavThemeToggle() {
 function updateThemeToggleLabels(theme) {
   const isDark = theme === "dark";
   const nextLabel = isDark ? "light" : "dark";
-  const icon = isDark ? themeIconSvg("sun") : themeIconSvg("moon");
+  const modeLabel = isDark ? "Dark" : "Light";
 
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
     button.setAttribute("aria-label", `Switch to ${nextLabel} mode`);
     button.setAttribute("title", `Switch to ${nextLabel} mode`);
-    button.innerHTML = `<span class="theme-icon" aria-hidden="true">${icon}</span>`;
-    button.classList.toggle("is-dark-target", !isDark);
-    button.classList.toggle("is-light-target", isDark);
+    button.classList.toggle("is-dark", isDark);
+    button.classList.toggle("is-light", !isDark);
+    const label = button.querySelector("[data-theme-pill-label]");
+    if (label) {
+      label.textContent = modeLabel;
+    }
   });
 }
 
 function applyTheme(theme) {
   const mode = theme === "dark" ? "dark" : "light";
-  document.body.setAttribute("data-theme", mode);
+  document.documentElement.setAttribute("data-theme", mode);
+  if (document.body) {
+    document.body.setAttribute("data-theme", mode);
+  }
   writeStorage(STORAGE_KEYS.theme, mode);
   updateThemeToggleLabels(mode);
 }
@@ -1103,17 +1210,6 @@ function saveAccountProfile(form) {
     setStatus(status, "Please select a valid accent color.", true);
     return;
   }
-
-  const users = getUsers().map((user) => {
-    if (user.id !== session.id) {
-      return user;
-    }
-    return {
-      ...user,
-      name: displayName
-    };
-  });
-  saveUsers(users);
 
   setSession({
     ...session,
@@ -2066,10 +2162,13 @@ function ensureChatbotWidget() {
   shell.className = "chatbot-shell";
   shell.dataset.chatbotShell = "1";
   shell.innerHTML = `
-    <button class="chatbot-launcher" type="button" data-chatbot-toggle aria-label="Open e-Zone AI assistant">
-      <span class="chatbot-launcher-icon" aria-hidden="true">AI</span>
-      <span class="chatbot-launcher-text">Ask e-Zone AI</span>
-    </button>
+    <div class="chatbot-actions">
+      <button class="chatbot-launcher" type="button" data-chatbot-toggle aria-label="Open e-Zone AI assistant">
+        <span class="chatbot-launcher-icon robot-icon" aria-hidden="true"><i></i><i></i></span>
+        <span class="chatbot-launcher-text">Ask e-Zone AI</span>
+      </button>
+      <a class="feedback-launcher" href="feedback.html" aria-label="Open feedback page">Feedback</a>
+    </div>
 
     <section class="chatbot-window glass" data-chatbot-window aria-hidden="true">
       <header class="chatbot-head" data-chatbot-drag>
@@ -2509,9 +2608,31 @@ function addControlTimeline(userKey, message) {
   saveControlCenterLogs(logs);
 }
 
+function addControlPurchase(userKey, purchase) {
+  const logs = getControlCenterLogs();
+  const record = logs[userKey] || {
+    visits: 0,
+    totalVisitMs: 0,
+    purchases: [],
+    timeline: [],
+    lastVisitAt: ""
+  };
+
+  const nextPurchases = Array.isArray(record.purchases) ? record.purchases : [];
+  nextPurchases.unshift({
+    id: String(purchase && purchase.id ? purchase.id : createId("purchase")),
+    name: String(purchase && purchase.name ? purchase.name : "Book"),
+    price: Number(purchase && purchase.price ? purchase.price : 0),
+    time: new Date().toISOString()
+  });
+  record.purchases = nextPurchases.slice(0, 40);
+  logs[userKey] = record;
+  saveControlCenterLogs(logs);
+}
+
 function registerControlCenterVisit() {
   const session = getSession();
-  if (!session || !session.email) {
+  if (!session || !session.email || !session.token) {
     return;
   }
 
@@ -2539,7 +2660,7 @@ function registerControlCenterVisit() {
 
 function persistControlCenterSessionTime() {
   const session = getSession();
-  if (!session || !session.email) {
+  if (!session || !session.email || !session.token) {
     return;
   }
 
@@ -2965,7 +3086,7 @@ function openControlMenu() {
 
 function refreshControlCenter() {
   const session = getSession();
-  const isLoggedIn = Boolean(session && session.email);
+  const isLoggedIn = Boolean(session && session.email && session.token);
   const isAdmin = Boolean(session && isOwnerRole(session.role));
   const prefs = isLoggedIn ? getAccountPrefs(session.id) : null;
   const displayName = isLoggedIn ? (prefs.displayName || session.name || session.email) : "";
@@ -3022,11 +3143,7 @@ function refreshControlCenter() {
     el.textContent = isAdmin ? "Owner" : "User";
   });
   document.querySelectorAll("[data-user-meta]").forEach((el) => {
-    const users = getUsers();
-    const currentUser = isLoggedIn
-      ? users.find((user) => normalizeEmail(user.email) === normalizeEmail(session.email))
-      : null;
-    const metaDate = isLoggedIn ? (session.loginAt || currentUser?.createdAt || "") : "";
+    const metaDate = isLoggedIn ? (session.loginAt || "") : "";
     el.textContent = metaDate ? `Last login ${new Date(metaDate).toLocaleString()}` : "Member since --";
   });
 
@@ -3216,6 +3333,13 @@ function bindControlCenter() {
           });
           if (!shouldLogout) {
             return;
+          }
+          try {
+            await apiRequest("/auth/logout", {
+              method: "POST"
+            });
+          } catch (error) {
+            // Session cleanup continues locally even if API logout fails.
           }
           clearSession();
           closeControlMenu();
@@ -3444,6 +3568,8 @@ function cardTemplate(book, options = {}) {
     ? `<a class="meta-pill meta-link" href="${safeRokomariUrl}" target="_blank" rel="noopener">Rokomari Link</a>`
     : "";
   const qrMeta = `<span class="meta-pill">QR: ${hasQr ? "Yes" : "No"}</span>`;
+  const buyHref = safeRokomariUrl || `book.html?id=${encodedId}`;
+  const buyAttr = safeRokomariUrl ? ` data-buy-link="${safeRokomariUrl}"` : "";
 
   const toggleFeatured = options.showFeaturedToggle
     ? `<button class="btn btn-ghost small" type="button" data-toggle-featured="${encodedId}">${book.featured ? "Unmark Featured" : "Mark Featured"}</button>`
@@ -3470,6 +3596,7 @@ function cardTemplate(book, options = {}) {
         ${toggleFeatured}
         ${removeAction}
         <a class="btn btn-ghost small" href="book.html?id=${encodedId}">View</a>
+        <a class="btn btn-primary small" href="${buyHref}" data-buy-book="${encodedId}"${buyAttr}>Buy</a>
       </div>
       ${options.showFileMeta ? `<div class="inline-meta"><span class="meta-pill">Storage: ${storageMode}</span><span class="meta-pill">Cover: ${escapeHtml(book.coverPdfName || "N/A")}</span>${rokomariLink}${qrMeta}</div>` : ""}
     </article>
@@ -3494,6 +3621,83 @@ function hydrateCovers(scope) {
       .replace(/(\r\n|\n|\r)/gm, "");
 
     element.style.backgroundImage = `url("${safeUrl}")`;
+  });
+}
+
+function decodeParam(value) {
+  const raw = String(value || "");
+  if (!raw) {
+    return "";
+  }
+  try {
+    return decodeURIComponent(raw);
+  } catch (error) {
+    return raw;
+  }
+}
+
+async function handleBuyAction(trigger) {
+  if (!(trigger instanceof HTMLElement)) {
+    return;
+  }
+
+  const bookId = decodeParam(trigger.getAttribute("data-buy-book") || "");
+  const buyLink = String(trigger.getAttribute("data-buy-link") || "").trim();
+  const session = getSession();
+
+  if (!session || !session.token) {
+    const goLogin = await openPopupModal({
+      title: "Login Required",
+      message: "Please login first to buy this book.",
+      kind: "warning",
+      showCancel: true,
+      confirmText: "Open Login",
+      cancelText: "Cancel"
+    });
+    if (goLogin) {
+      window.location.href = "login.html";
+    }
+    return;
+  }
+
+  const book = findBookById(bookId);
+  if (book && session.email) {
+    addControlPurchase(normalizeEmail(session.email), {
+      id: book.id,
+      name: book.title,
+      price: Number(book.price || 0)
+    });
+    addControlTimeline(normalizeEmail(session.email), `Initiated buy flow for ${book.title}`);
+    refreshControlCenter();
+  }
+
+  if (buyLink) {
+    window.open(buyLink, "_blank", "noopener");
+    return;
+  }
+
+  if (bookId) {
+    window.location.href = `book.html?id=${encodeURIComponent(bookId)}`;
+  }
+}
+
+function initBuyButtonGuards() {
+  if (document.body.dataset.buyGuardBound === "1") {
+    return;
+  }
+  document.body.dataset.buyGuardBound = "1";
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const trigger = target.closest("[data-buy-book]");
+    if (!(trigger instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    handleBuyAction(trigger);
   });
 }
 
@@ -3878,7 +4082,7 @@ function renderBookDetail() {
           <li>Complete purchase flow from the provided source.</li>
           <li>Need support? Contact e-Zone with the title and your email.</li>
         </ol>
-        ${safeRokomariUrl ? `<div class="actions" style="margin-top:0.7rem;"><a class="btn btn-primary" href="${safeRokomariUrl}" target="_blank" rel="noopener">Open on Rokomari</a></div>` : ""}
+        ${safeRokomariUrl ? `<div class="actions" style="margin-top:0.7rem;"><a class="btn btn-primary" href="${safeRokomariUrl}" target="_blank" rel="noopener" data-buy-book="${encodeURIComponent(book.id)}" data-buy-link="${safeRokomariUrl}">Buy Now</a></div>` : `<div class="actions" style="margin-top:0.7rem;"><a class="btn btn-primary" href="book.html?id=${encodeURIComponent(book.id)}" data-buy-book="${encodeURIComponent(book.id)}">Buy Now</a></div>`}
         ${safeQrSource ? `
           <div class="qr-box">
             <p class="info-text">Scan QR to open purchase source</p>
@@ -3958,7 +4162,7 @@ function initContactForm() {
 
     const formData = new FormData(form);
     const name = String(formData.get("name") || "").trim();
-    const email = normalizeEmail(formData.get("email"));
+    const email = normalizeEmail(formData.get("email") || formData.get("username"));
     const message = String(formData.get("message") || "").trim();
 
     if (!name || !email || !message) {
@@ -3974,6 +4178,433 @@ function initContactForm() {
     form.reset();
     setStatus(status, "Message captured in demo mode. Email sending is not connected yet.", false);
   });
+}
+
+function formatDateTime(value) {
+  const time = new Date(value || Date.now());
+  if (Number.isNaN(time.getTime())) {
+    return "Unknown time";
+  }
+  return time.toLocaleString();
+}
+
+function getVotesCount(votes) {
+  const source = votes && typeof votes === "object" ? votes : {};
+  const up = Array.isArray(source.up) ? source.up.length : 0;
+  const down = Array.isArray(source.down) ? source.down.length : 0;
+  return { up, down };
+}
+
+function feedbackRepliesMarkup(item) {
+  const replies = Array.isArray(item && item.replies) ? item.replies : [];
+  if (!replies.length) {
+    return "<p class='info-text'>No replies yet.</p>";
+  }
+
+  return replies.map((reply) => {
+    const author = escapeHtml(String(reply.author || "Owner"));
+    const role = escapeHtml(String(reply.role || "user"));
+    const content = escapeHtml(String(reply.content || ""));
+    return `
+      <article class="feedback-reply-item">
+        <p class="feedback-reply-head">${author}(${role})</p>
+        <p class="feedback-reply-text">${content}</p>
+        <p class="feedback-meta">${formatDateTime(reply.createdAt)}</p>
+      </article>
+    `;
+  }).join("");
+}
+
+function feedbackCardsMarkup(items, options = {}) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    return `<article class="soft-panel"><p class="info-text">${escapeHtml(options.emptyText || "No items yet.")}</p></article>`;
+  }
+
+  return `<div class="feedback-list">
+    ${list.map((item) => {
+      const id = encodeURIComponent(String(item.id || ""));
+      const author = escapeHtml(String(item.author || "user"));
+      const type = escapeHtml(String(item.type || "feature"));
+      const content = escapeHtml(String(item.content || ""));
+      const votes = getVotesCount(item.votes);
+      return `
+        <article class="soft-panel feedback-card" data-feedback-card="${id}">
+          <div class="feedback-head">
+            <p class="feedback-type">${type}</p>
+            <p class="feedback-meta">${author} · ${formatDateTime(item.createdAt)}</p>
+          </div>
+          <p class="feedback-content">${content}</p>
+          ${options.allowVotes ? `
+            <div class="feedback-votes">
+              <button class="btn btn-ghost small" type="button" data-feedback-vote="${id}" data-vote-value="up">Upvote (${votes.up})</button>
+              <button class="btn btn-ghost small" type="button" data-feedback-vote="${id}" data-vote-value="down">Downvote (${votes.down})</button>
+            </div>
+          ` : `<p class="feedback-meta">Upvotes: ${votes.up} · Downvotes: ${votes.down}</p>`}
+          <div class="feedback-replies">
+            <h4>Replies</h4>
+            ${feedbackRepliesMarkup(item)}
+          </div>
+          ${options.allowReply ? `
+            <form class="feedback-inline-form" data-feedback-reply-form data-feedback-id="${id}" novalidate>
+              <input class="input" type="text" name="content" maxlength="500" required placeholder="Write a reply">
+              <button class="btn btn-primary small" type="submit">Reply</button>
+            </form>
+          ` : ""}
+        </article>
+      `;
+    }).join("")}
+  </div>`;
+}
+
+function updatesMarkup(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    return "<article class='soft-panel'><p class='info-text'>No updates yet.</p></article>";
+  }
+
+  return `<div class="feedback-list">
+    ${list.map((item) => `
+      <article class="soft-panel update-card">
+        <p class="feedback-type">Update</p>
+        <h3>${escapeHtml(String(item.title || "Update"))}</h3>
+        <p class="feedback-content">${escapeHtml(String(item.content || ""))}</p>
+        <p class="feedback-meta">${escapeHtml(String(item.author || "Owner"))}(${escapeHtml(String(item.role || "owner"))}) · ${formatDateTime(item.createdAt)}</p>
+      </article>
+    `).join("")}
+  </div>`;
+}
+
+function renderFeedbackTabContent(state) {
+  const feedback = Array.isArray(state.feedback) ? state.feedback : [];
+  const updates = Array.isArray(state.updates) ? state.updates : [];
+  const username = String((state.session && state.session.username) || (state.session && state.session.email) || "");
+  const isOwner = Boolean(state.isOwner);
+
+  if (!isOwner && state.activeTab === "my_feedback") {
+    const mine = feedback.filter((item) => String(item.author || "").toLowerCase() === username.toLowerCase());
+    return `
+      <div class="feedback-layout">
+        <article class="form-card">
+          <h3>Submit Feedback</h3>
+          <form data-feedback-create novalidate>
+            <div class="field">
+              <label for="feedback-type">Type</label>
+              <select class="select" id="feedback-type" name="type" required>
+                <option value="feature">Feature Suggestion</option>
+                <option value="bug">Bug Report</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="feedback-content">Details</label>
+              <textarea class="textarea" id="feedback-content" name="content" rows="4" maxlength="1200" required placeholder="Write your feature suggestion or report..."></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit">Submit</button>
+          </form>
+        </article>
+        <section>
+          <h3 class="feedback-section-title">My Feedback</h3>
+          ${feedbackCardsMarkup(mine, {
+            allowVotes: false,
+            allowReply: false,
+            emptyText: "You have not submitted feedback yet."
+          })}
+        </section>
+      </div>
+    `;
+  }
+
+  if (!isOwner && state.activeTab === "community_feedback") {
+    return `
+      <section>
+        <h3 class="feedback-section-title">Community Feedback</h3>
+        ${feedbackCardsMarkup(feedback, {
+          allowVotes: true,
+          allowReply: true,
+          emptyText: "No community feedback yet."
+        })}
+      </section>
+    `;
+  }
+
+  if (!isOwner && state.activeTab === "news") {
+    return `
+      <section>
+        <h3 class="feedback-section-title">News</h3>
+        ${updatesMarkup(updates)}
+      </section>
+    `;
+  }
+
+  if (isOwner && state.activeTab === "feedbacks") {
+    const features = feedback.filter((item) => String(item.type || "") === "feature");
+    return `
+      <section>
+        <h3 class="feedback-section-title">Feature Suggestions</h3>
+        ${feedbackCardsMarkup(features, {
+          allowVotes: false,
+          allowReply: true,
+          emptyText: "No feature suggestions yet."
+        })}
+      </section>
+    `;
+  }
+
+  if (isOwner && state.activeTab === "problems") {
+    const bugs = feedback.filter((item) => String(item.type || "") === "bug");
+    return `
+      <section>
+        <h3 class="feedback-section-title">Problems / Bug Reports</h3>
+        ${feedbackCardsMarkup(bugs, {
+          allowVotes: false,
+          allowReply: true,
+          emptyText: "No bug reports yet."
+        })}
+      </section>
+    `;
+  }
+
+  if (isOwner && state.activeTab === "updates_fixes") {
+    return `
+      <div class="feedback-layout">
+        <article class="form-card">
+          <h3>Publish Update</h3>
+          <form data-update-create novalidate>
+            <div class="field">
+              <label for="update-title">Title</label>
+              <input class="input" id="update-title" name="title" type="text" maxlength="120" required>
+            </div>
+            <div class="field">
+              <label for="update-content">Update Details</label>
+              <textarea class="textarea" id="update-content" name="content" rows="4" maxlength="2000" required></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit">Publish</button>
+          </form>
+        </article>
+        <section>
+          <h3 class="feedback-section-title">Updates & Fixes Feed</h3>
+          ${updatesMarkup(updates)}
+        </section>
+      </div>
+    `;
+  }
+
+  return "<article class='soft-panel'><p class='info-text'>Select a tab to continue.</p></article>";
+}
+
+function initFeedbackPage() {
+  const root = document.getElementById("feedback-app");
+  if (!root) {
+    return;
+  }
+
+  const session = getSession();
+  if (!session || !session.token) {
+    root.innerHTML = `
+      <article class="soft-panel">
+        <h2>Login Required</h2>
+        <p class="info-text">Feedback is available only for logged-in users.</p>
+        <div class="actions" style="margin-top:0.6rem;">
+          <a class="btn btn-primary" href="login.html">Open Login</a>
+        </div>
+      </article>
+    `;
+    return;
+  }
+
+  const state = {
+    session,
+    isOwner: isOwnerRole(session.role),
+    feedback: [],
+    updates: [],
+    activeTab: ""
+  };
+
+  const tabs = state.isOwner
+    ? [
+      { id: "feedbacks", label: "Feedbacks" },
+      { id: "problems", label: "Problems" },
+      { id: "updates_fixes", label: "Updates & Fixes" }
+    ]
+    : [
+      { id: "my_feedback", label: "My Feedback" },
+      { id: "community_feedback", label: "Community Feedback" },
+      { id: "news", label: "News" }
+    ];
+
+  state.activeTab = tabs[0].id;
+
+  const render = () => {
+    root.innerHTML = `
+      <article class="soft-panel feedback-shell">
+        <div class="feedback-headline">
+          <div>
+            <span class="section-label">Feedback Center</span>
+            <h2>${state.isOwner ? "Owner Dashboard" : "User Feedback Panel"}</h2>
+            <p class="info-text">All feedback data is persisted in JSON files through the API backend.</p>
+          </div>
+          <p class="status" id="feedback-status" aria-live="polite"></p>
+        </div>
+        <div class="feedback-tabs" role="tablist" aria-label="Feedback tabs">
+          ${tabs.map((tab) => `
+            <button class="feedback-tab ${state.activeTab === tab.id ? "active" : ""}" type="button" role="tab" aria-selected="${state.activeTab === tab.id ? "true" : "false"}" data-feedback-tab="${tab.id}">
+              ${escapeHtml(tab.label)}
+            </button>
+          `).join("")}
+        </div>
+        <div class="feedback-panel">
+          ${renderFeedbackTabContent(state)}
+        </div>
+      </article>
+    `;
+    initCustomSelects();
+  };
+
+  const setFeedbackStatus = (message, isError = false) => {
+    const status = document.getElementById("feedback-status");
+    if (!status) {
+      return;
+    }
+    status.textContent = String(message || "");
+    status.style.color = isError ? "#b52a4f" : "#376a84";
+  };
+
+  const load = async () => {
+    try {
+      setFeedbackStatus("Loading...", false);
+      const payload = await apiRequest("/feedback", { method: "GET" });
+      state.feedback = Array.isArray(payload.feedback) ? payload.feedback : [];
+      state.updates = Array.isArray(payload.updates) ? payload.updates : [];
+      render();
+      setFeedbackStatus("", false);
+    } catch (error) {
+      if (error && Number(error.status) === 401) {
+        clearSession();
+        refreshControlCenter();
+      }
+      root.innerHTML = `
+        <article class="soft-panel">
+          <h2>Feedback Unavailable</h2>
+          <p class="info-text">${escapeHtml(error instanceof Error ? error.message : "Could not load feedback data.")}</p>
+        </article>
+      `;
+    }
+  };
+
+  root.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const tabButton = target.closest("[data-feedback-tab]");
+    if (tabButton instanceof HTMLButtonElement) {
+      const tabId = String(tabButton.getAttribute("data-feedback-tab") || "");
+      if (!tabId || state.activeTab === tabId) {
+        return;
+      }
+      state.activeTab = tabId;
+      render();
+      return;
+    }
+
+    const voteButton = target.closest("[data-feedback-vote]");
+    if (voteButton instanceof HTMLButtonElement) {
+      const feedbackId = decodeParam(voteButton.getAttribute("data-feedback-vote") || "");
+      const value = String(voteButton.getAttribute("data-vote-value") || "").trim().toLowerCase();
+      if (!feedbackId || !["up", "down"].includes(value)) {
+        return;
+      }
+      try {
+        setFeedbackStatus("Saving vote...", false);
+        await apiRequest(`/feedback/${encodeURIComponent(feedbackId)}/vote`, {
+          method: "POST",
+          body: { value }
+        });
+        await load();
+      } catch (error) {
+        setFeedbackStatus(error instanceof Error ? error.message : "Could not save vote.", true);
+      }
+    }
+  });
+
+  root.addEventListener("submit", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLFormElement)) {
+      return;
+    }
+
+    if (target.hasAttribute("data-feedback-create")) {
+      event.preventDefault();
+      const formData = new FormData(target);
+      const type = String(formData.get("type") || "").trim().toLowerCase();
+      const content = String(formData.get("content") || "").trim();
+      if (!content || !["feature", "bug"].includes(type)) {
+        setFeedbackStatus("Please provide type and details.", true);
+        return;
+      }
+      try {
+        setFeedbackStatus("Submitting feedback...", false);
+        await apiRequest("/feedback", {
+          method: "POST",
+          body: { type, content }
+        });
+        target.reset();
+        await load();
+      } catch (error) {
+        setFeedbackStatus(error instanceof Error ? error.message : "Could not submit feedback.", true);
+      }
+      return;
+    }
+
+    if (target.hasAttribute("data-feedback-reply-form")) {
+      event.preventDefault();
+      const feedbackId = decodeParam(target.getAttribute("data-feedback-id") || "");
+      const formData = new FormData(target);
+      const content = String(formData.get("content") || "").trim();
+      if (!feedbackId || !content) {
+        setFeedbackStatus("Reply message is required.", true);
+        return;
+      }
+      try {
+        setFeedbackStatus("Posting reply...", false);
+        await apiRequest(`/feedback/${encodeURIComponent(feedbackId)}/replies`, {
+          method: "POST",
+          body: { content }
+        });
+        target.reset();
+        await load();
+      } catch (error) {
+        setFeedbackStatus(error instanceof Error ? error.message : "Could not post reply.", true);
+      }
+      return;
+    }
+
+    if (target.hasAttribute("data-update-create")) {
+      event.preventDefault();
+      const formData = new FormData(target);
+      const title = String(formData.get("title") || "").trim();
+      const content = String(formData.get("content") || "").trim();
+      if (!title || !content) {
+        setFeedbackStatus("Update title and content are required.", true);
+        return;
+      }
+      try {
+        setFeedbackStatus("Publishing update...", false);
+        await apiRequest("/updates", {
+          method: "POST",
+          body: { title, content }
+        });
+        target.reset();
+        await load();
+      } catch (error) {
+        setFeedbackStatus(error instanceof Error ? error.message : "Could not publish update.", true);
+      }
+    }
+  });
+
+  render();
+  load();
 }
 
 function isStrongPassword(password) {
@@ -3993,22 +4624,17 @@ async function initSignupForm() {
 
     const formData = new FormData(form);
     const name = String(formData.get("name") || "").trim();
-    const email = normalizeEmail(formData.get("email"));
+    const username = normalizeEmail(formData.get("email") || formData.get("username"));
     const password = String(formData.get("password") || "");
     const confirmPassword = String(formData.get("confirmPassword") || "");
 
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !username || !password || !confirmPassword) {
       setStatus(status, "Please complete all signup fields.", true);
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setStatus(status, "Please enter a valid email address.", true);
-      return;
-    }
-
-    if (email === normalizeEmail(ADMIN_ACCOUNT.email)) {
-      setStatus(status, "Owner credentials are fixed and cannot be created from registration.", true);
+    if (!/^[a-z0-9._-]{3,40}$/i.test(username)) {
+      setStatus(status, "Username must be 3-40 chars (letters, numbers, ., _, -).", true);
       return;
     }
 
@@ -4022,42 +4648,45 @@ async function initSignupForm() {
       return;
     }
 
-    const users = getUsers();
-    const exists = users.some((user) => normalizeEmail(user.email) === email);
-
-    if (exists) {
-      setStatus(status, "This email already exists. Please login.", true);
+    try {
+      await apiRequest("/auth/register", {
+        method: "POST",
+        auth: false,
+        body: {
+          username,
+          password,
+          displayName: name
+        }
+      });
+    } catch (error) {
+      setStatus(status, error instanceof Error ? error.message : "Registration failed.", true);
       return;
     }
 
-    const passHash = await hashPassword(password);
+    try {
+      const loginPayload = await apiRequest("/auth/login", {
+        method: "POST",
+        auth: false,
+        body: {
+          username,
+          password
+        }
+      });
 
-    const user = {
-      id: createId("user"),
-      name,
-      email,
-      passHash,
-      role: "user",
-      createdAt: new Date().toISOString()
-    };
+      const mapped = mapApiUserToSession(loginPayload.user, String(loginPayload.token || ""));
+      setSession(mapped);
+      refreshControlCenter();
+      setStatus(status, "Registration complete. Redirecting...", false);
 
-    users.push(user);
-    saveUsers(users);
-
-    setSession({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: normalizeRole(user.role),
-      loginAt: new Date().toISOString()
-    });
-
-    refreshControlCenter();
-    setStatus(status, "Registration complete. Redirecting to home...", false);
-
-    window.setTimeout(() => {
-      window.location.href = "index.html";
-    }, 850);
+      window.setTimeout(() => {
+        window.location.href = "index.html";
+      }, 700);
+    } catch (error) {
+      setStatus(status, "Registered, but auto-login failed. Please login manually.", true);
+      window.setTimeout(() => {
+        window.location.href = "login.html";
+      }, 900);
+    }
   });
 }
 
@@ -4073,42 +4702,36 @@ async function initLoginForm() {
     event.preventDefault();
 
     const formData = new FormData(form);
-    const email = normalizeEmail(formData.get("email"));
+    const username = normalizeEmail(formData.get("email") || formData.get("username"));
     const password = String(formData.get("password") || "");
 
-    if (!email || !password) {
-      setStatus(status, "Please provide email and password.", true);
+    if (!username || !password) {
+      setStatus(status, "Please provide username and password.", true);
       return;
     }
 
-    const users = getUsers();
-    const user = users.find((entry) => normalizeEmail(entry.email) === email);
+    try {
+      const payload = await apiRequest("/auth/login", {
+        method: "POST",
+        auth: false,
+        body: {
+          username,
+          password
+        }
+      });
 
-    if (!user) {
-      setStatus(status, "No account found for this email.", true);
-      return;
+      const mapped = mapApiUserToSession(payload.user, String(payload.token || ""));
+      setSession(mapped);
+
+      refreshControlCenter();
+      setStatus(status, "Login successful. Redirecting...", false);
+
+      window.setTimeout(() => {
+        window.location.href = isOwnerRole(mapped.role) ? "dashboard.html" : "index.html";
+      }, 650);
+    } catch (error) {
+      setStatus(status, error instanceof Error ? error.message : "Login failed.", true);
     }
-
-    const passHash = await hashPassword(password);
-    if (passHash !== user.passHash) {
-      setStatus(status, "Incorrect password.", true);
-      return;
-    }
-
-    setSession({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: normalizeRole(user.role),
-      loginAt: new Date().toISOString()
-    });
-
-    refreshControlCenter();
-    setStatus(status, "Login successful. Redirecting...", false);
-
-    window.setTimeout(() => {
-      window.location.href = isOwnerRole(user.role) ? "dashboard.html" : "index.html";
-    }, 650);
   });
 }
 
@@ -4705,6 +5328,7 @@ function initPageLoader() {
 
 async function initialize() {
   await ensureAdminSeed();
+  await syncSessionFromApi();
   normalizeSessionRole();
   initPageLoader();
   stripLegacyCustomizationSections();
@@ -4731,8 +5355,10 @@ async function initialize() {
   renderHomeCategories();
   renderBooksPageCategories();
   initBookSearchFilters();
+  initBuyButtonGuards();
   renderCategoryPage();
   renderBookDetail();
+  initFeedbackPage();
   initUniversalScrollAnimations();
 
   initContactForm();

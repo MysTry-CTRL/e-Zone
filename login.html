@@ -10,6 +10,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap" rel="stylesheet">
+  <script data-theme-bootstrap>
+    (function() {
+      try {
+        var theme = localStorage.getItem("ezone_theme_v1");
+        if (theme === "dark" || theme === "light") {
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+      } catch (error) {
+        // Ignore theme bootstrap errors.
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="loading-active">
@@ -122,8 +134,8 @@
 
         <form id="login-form" novalidate>
           <div class="field">
-            <label for="login-email">Email</label>
-            <input class="input" id="login-email" name="email" type="email" required>
+            <label for="login-username">Username</label>
+            <input class="input" id="login-username" name="username" type="text" autocomplete="username" required>
           </div>
 
           <div class="field">
@@ -173,6 +185,9 @@
   <script src="script.js"></script>
 </body>
 </html>
+
+
+
 
 
 

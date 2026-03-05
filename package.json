@@ -1,0 +1,13 @@
+{
+  "name": "e-zone-json-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "e-Zone web app with JSON-file persistence and role-based feedback system.",
+  "main": "server/index.cjs",
+  "scripts": {
+    "start": "node server/index.cjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -10,6 +10,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap" rel="stylesheet">
+  <script data-theme-bootstrap>
+    (function() {
+      try {
+        var theme = localStorage.getItem("ezone_theme_v1");
+        if (theme === "dark" || theme === "light") {
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+      } catch (error) {
+        // Ignore theme bootstrap errors.
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="loading-active">
@@ -158,6 +170,9 @@
   <script src="script.js"></script>
 </body>
 </html>
+
+
+
 
 
 
