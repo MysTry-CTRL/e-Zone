@@ -1,0 +1,7 @@
+{
+  "provider": "cloudinary",
+  "enabled": false,
+  "cloudName": "",
+  "uploadPreset": "",
+  "folder": "e-zone"
+}

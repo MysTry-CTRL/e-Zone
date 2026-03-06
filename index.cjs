@@ -5,18 +5,18 @@ const crypto = require("crypto");
 
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
-const ROOT_DIR = path.join(__dirname, "..");
-const DATA_DIR = path.join(__dirname, "data");
-const USERS_FILE = path.join(DATA_DIR, "users.json");
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
-const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
+const ROOT_DIR = __dirname;
+const USERS_FILE = path.join(ROOT_DIR, "users.json");
+const SESSIONS_FILE = path.join(ROOT_DIR, "sessions.json");
+const FEEDBACK_FILE = path.join(ROOT_DIR, "feedback.json");
 const OWNER_EMAIL = "abirxxdbrine2024@gmail.com";
 const OWNER_PASSWORD_HASH = "4f5ee7a58581ac12f6e04bdcc24add36735a0c8d4d988eae78774554ed101dbb";
 const OWNER_NAME = "Owner";
 
 function ensureFile(filePath, fallbackJson) {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  const dirPath = path.dirname(filePath);
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
   }
 
   if (!fs.existsSync(filePath)) {
@@ -76,6 +76,25 @@ function sanitizeUser(user) {
     username: String(user.username || ""),
     role: String(user.role || "user"),
     displayName: String(user.displayName || user.username || "")
+  };
+}
+
+function sanitizeCredentialUser(user) {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+
+  const rawPassword = String(user.passwordVisible || user.password || "");
+  const passwordHash = String(user.passwordHash || hashPassword(rawPassword));
+
+  return {
+    id: String(user.id || ""),
+    username: String(user.username || ""),
+    role: String(user.role || "user"),
+    displayName: String(user.displayName || user.username || ""),
+    createdAt: String(user.createdAt || ""),
+    passwordVisible: rawPassword,
+    passwordHash
   };
 }
 
@@ -221,6 +240,7 @@ app.post("/api/auth/register", (request, response) => {
     id: randomId("user"),
     username: usernameRaw,
     passwordHash: hashPassword(password),
+    passwordVisible: password,
     role: "user",
     displayName: displayName || usernameRaw,
     createdAt: new Date().toISOString()
@@ -441,6 +461,14 @@ app.post("/api/updates", requireAuth, requireOwner, (request, response) => {
   response.status(201).json({
     message: "Update published.",
     update
+  });
+});
+
+app.get("/api/owner/users", requireAuth, requireOwner, (_request, response) => {
+  const usersStore = getUsersStore();
+  const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+  response.json({
+    users: users.map(sanitizeCredentialUser).filter(Boolean)
   });
 });
 

@@ -15,6 +15,82 @@ const STORAGE_KEYS = {
   backendFeedback: "ezone_backend_feedback_v1"
 };
 
+const JSON_BOOTSTRAP_SOURCES = [
+  {
+    key: STORAGE_KEYS.backendUsers,
+    file: "users.json",
+    fallback: { users: [] }
+  },
+  {
+    key: STORAGE_KEYS.backendSessions,
+    file: "sessions.json",
+    fallback: { sessions: [] }
+  },
+  {
+    key: STORAGE_KEYS.backendFeedback,
+    file: "feedback.json",
+    fallback: { feedback: [], updates: [], bugReports: [] }
+  },
+  {
+    key: STORAGE_KEYS.users,
+    file: "storage-users.json",
+    fallback: []
+  },
+  {
+    key: STORAGE_KEYS.session,
+    file: "storage-session.json",
+    fallback: null,
+    preserveWhenNull: true
+  },
+  {
+    key: STORAGE_KEYS.customBooks,
+    file: "storage-books.json",
+    fallback: []
+  },
+  {
+    key: STORAGE_KEYS.bookReviews,
+    file: "storage-book-reviews.json",
+    fallback: {}
+  },
+  {
+    key: STORAGE_KEYS.cloudConfig,
+    file: "storage-cloud-config.json",
+    fallback: {}
+  },
+  {
+    key: STORAGE_KEYS.accountPrefs,
+    file: "storage-account-prefs.json",
+    fallback: {}
+  },
+  {
+    key: STORAGE_KEYS.controlCenterLogs,
+    file: "storage-control-logs.json",
+    fallback: {}
+  },
+  {
+    key: STORAGE_KEYS.chatbotHistory,
+    file: "storage-chatbot-history.json",
+    fallback: []
+  },
+  {
+    key: STORAGE_KEYS.chatbotState,
+    file: "storage-chatbot-state.json",
+    fallback: {
+      open: false,
+      minimized: false,
+      width: 380,
+      height: 520,
+      x: null,
+      y: null
+    }
+  },
+  {
+    key: STORAGE_KEYS.theme,
+    file: "storage-theme.json",
+    fallback: ""
+  }
+];
+
 const OWNER_ACCOUNT = {
   name: "Owner",
   email: atob("YWJpcnh4ZGJyaW5lMjAyNEBnbWFpbC5jb20="),
@@ -277,6 +353,7 @@ async function fallbackApiRequest(path, options = {}) {
       id: createId("user"),
       username: usernameRaw,
       passwordHash: passHash,
+      passwordVisible: password,
       role: "user",
       displayName: displayName || usernameRaw,
       createdAt: new Date().toISOString()
@@ -517,6 +594,37 @@ async function fallbackApiRequest(path, options = {}) {
     };
   }
 
+  if (path === "/owner/users" && method === "GET") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    if (!isOwnerRole(authUser.role)) {
+      throw backendError("Owner access required.", 403);
+    }
+
+    const usersStore = getBackendUsersStore();
+    const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+    const serialized = await Promise.all(users.map(async (entry) => {
+      const rawPassword = String(entry.passwordVisible || entry.password || "");
+      const passwordHash = String(
+        entry.passwordHash
+        || (rawPassword ? await hashPassword(rawPassword) : "")
+      );
+
+      return {
+        id: String(entry.id || ""),
+        username: String(entry.username || ""),
+        role: normalizeRole(entry.role),
+        displayName: String(entry.displayName || entry.username || ""),
+        createdAt: String(entry.createdAt || ""),
+        passwordVisible: rawPassword,
+        passwordHash
+      };
+    }));
+
+    return { users: serialized };
+  }
+
   throw backendError("Endpoint not available.", 404);
 }
 
@@ -710,6 +818,59 @@ function writeStorage(key, value) {
   } catch (error) {
     return false;
   }
+}
+
+function cloneJsonValue(value) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (error) {
+    return value;
+  }
+}
+
+async function fetchJsonBootstrap(file, fallback, stamp) {
+  const response = await fetch(`${file}?refresh=${stamp}`, {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Bootstrap fetch failed for ${file}`);
+  }
+
+  const raw = await response.text();
+  if (!raw.trim()) {
+    return cloneJsonValue(fallback);
+  }
+
+  return JSON.parse(raw);
+}
+
+async function hydrateStorageFromJsonFiles() {
+  if (typeof window === "undefined" || typeof fetch !== "function") {
+    return;
+  }
+
+  const stamp = Date.now();
+  const jobs = JSON_BOOTSTRAP_SOURCES.map(async (source) => {
+    const fallback = cloneJsonValue(source.fallback);
+    try {
+      const payload = await fetchJsonBootstrap(source.file, fallback, stamp);
+      if (payload === null && source.preserveWhenNull) {
+        return;
+      }
+      writeStorage(source.key, payload);
+    } catch (error) {
+      if (source.preserveWhenNull) {
+        return;
+      }
+      writeStorage(source.key, fallback);
+    }
+  });
+
+  await Promise.all(jobs);
 }
 
 function getUsers() {
@@ -2997,6 +3158,11 @@ function initChatbotAsync() {
 
 let controlCenterSessionStartMs = Date.now();
 let popupModalResolver = null;
+let ownerCredentialPanelOpen = false;
+let ownerCredentialCache = {
+  loadedAt: 0,
+  users: []
+};
 
 function getControlCenterLogs() {
   const logs = readStorage(STORAGE_KEYS.controlCenterLogs, {});
@@ -3127,6 +3293,123 @@ function formatControlDuration(ms) {
     return `${hours}h ${minutes}m`;
   }
   return `${minutes}m`;
+}
+
+function ensureOwnerCredentialControls() {
+  document.querySelectorAll("[data-user-menu]").forEach((menu) => {
+    const actions = menu.querySelector(".user-menu-actions");
+    if (actions && !actions.querySelector('[data-action="toggle-owner-users"]')) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-ghost";
+      button.setAttribute("data-admin-only", "1");
+      button.setAttribute("data-action", "toggle-owner-users");
+      button.setAttribute("data-owner-users-toggle", "1");
+      button.textContent = "User Credentials";
+      const logoutButton = actions.querySelector('[data-action="logout"]');
+      actions.insertBefore(button, logoutButton || null);
+    }
+
+    if (!menu.querySelector("[data-owner-users-panel]")) {
+      const section = document.createElement("div");
+      section.className = "user-menu-section owner-credentials-section";
+      section.setAttribute("data-owner-users-panel", "1");
+      section.style.display = "none";
+      section.innerHTML = `
+        <div class="owner-credentials-head">
+          <h4>Registered Users & Credentials</h4>
+          <button class="btn btn-outline small" type="button" data-action="reload-owner-users">Refresh</button>
+        </div>
+        <div class="menu-log owner-credentials-log" data-owner-users-list>
+          <div class="menu-log-item"><span>Hidden</span>Only owner can view credentials.</div>
+        </div>
+      `;
+      menu.appendChild(section);
+    }
+  });
+}
+
+function updateOwnerCredentialPanelVisibility(isAdmin) {
+  const shouldShow = Boolean(isAdmin && ownerCredentialPanelOpen);
+  document.querySelectorAll("[data-owner-users-panel]").forEach((panel) => {
+    panel.style.display = shouldShow ? "grid" : "none";
+  });
+  document.querySelectorAll("[data-owner-users-toggle]").forEach((button) => {
+    button.classList.toggle("is-active", shouldShow);
+    button.textContent = shouldShow ? "Hide User Credentials" : "User Credentials";
+  });
+}
+
+function renderOwnerCredentialRows(users, notice = "") {
+  const rows = Array.isArray(users) ? users : [];
+  document.querySelectorAll("[data-owner-users-list]").forEach((root) => {
+    if (!rows.length) {
+      root.innerHTML = notice
+        ? `<div class="menu-log-item"><span>${escapeHtml(notice)}</span></div>`
+        : '<div class="menu-log-item"><span>No users found</span>No registered records available.</div>';
+      return;
+    }
+
+    root.innerHTML = rows.map((user) => {
+      const username = escapeHtml(user.username || user.email || "Unknown");
+      const role = escapeHtml(normalizeRole(user.role || "user"));
+      const displayName = escapeHtml(user.displayName || user.username || "Reader");
+      const createdAt = user.createdAt
+        ? new Date(user.createdAt).toLocaleString()
+        : "N/A";
+      const passwordVisible = String(user.passwordVisible || "").trim();
+      const passwordHash = String(user.passwordHash || "").trim();
+      const credentialValue = passwordVisible || passwordHash || "Unavailable";
+      const credentialType = passwordVisible
+        ? "Password"
+        : passwordHash
+          ? "Password Hash"
+          : "Credential";
+
+      return `
+        <div class="menu-log-item owner-credential-item">
+          <span>${username} (${role})</span>
+          <div>Name: ${displayName}</div>
+          <div>Created: ${escapeHtml(createdAt)}</div>
+          <div>${credentialType}:</div>
+          <code>${escapeHtml(credentialValue)}</code>
+        </div>
+      `;
+    }).join("");
+  });
+}
+
+async function fetchOwnerCredentials(force = false) {
+  const now = Date.now();
+  if (!force && (now - Number(ownerCredentialCache.loadedAt || 0)) < 15000 && Array.isArray(ownerCredentialCache.users)) {
+    return ownerCredentialCache.users;
+  }
+
+  const payload = await apiRequest("/owner/users", { method: "GET" });
+  const users = payload && Array.isArray(payload.users) ? payload.users : [];
+  ownerCredentialCache = {
+    loadedAt: now,
+    users
+  };
+  return users;
+}
+
+async function renderOwnerCredentialPanel(force = false) {
+  const session = getSession();
+  const isAdmin = Boolean(session && isOwnerRole(session.role));
+
+  updateOwnerCredentialPanelVisibility(isAdmin);
+  if (!(isAdmin && ownerCredentialPanelOpen)) {
+    return;
+  }
+
+  renderOwnerCredentialRows([], "Loading user credentials...");
+  try {
+    const users = await fetchOwnerCredentials(force);
+    renderOwnerCredentialRows(users);
+  } catch (error) {
+    renderOwnerCredentialRows([], "Failed to load user credentials.");
+  }
 }
 
 function ensureCybrlyProfileCustomizeModal() {
@@ -3527,6 +3810,12 @@ function refreshControlCenter() {
   const initials = isLoggedIn ? getInitials(displayName, "DP") : "DP";
   const profileImage = isLoggedIn ? normalizeProfileImageData(prefs.profileImage) : "";
 
+  ensureOwnerCredentialControls();
+  if (!isAdmin) {
+    ownerCredentialPanelOpen = false;
+  }
+  updateOwnerCredentialPanelVisibility(isAdmin);
+
   document.body.classList.toggle("admin-mode", isAdmin);
   stripLegacyCustomizationSections();
 
@@ -3664,6 +3953,8 @@ function refreshControlCenter() {
         ? combined.slice(0, 8).map((entry) => `<div class="menu-log-item"><span>${escapeHtml(entry.message || "Activity")}</span>${new Date(entry.time || Date.now()).toLocaleString()}</div>`).join("")
         : '<div class="menu-log-item"><span>No activity yet</span>System events will appear here.</div>';
     }
+
+    void renderOwnerCredentialPanel();
   }
 
   if (isLoggedIn) {
@@ -3755,6 +4046,29 @@ function bindControlCenter() {
 
       if (actionEl) {
         const action = actionEl.getAttribute("data-action");
+
+        if (action === "toggle-owner-users") {
+          const session = getSession();
+          if (!session || !isOwnerRole(session.role)) {
+            return;
+          }
+          ownerCredentialPanelOpen = !ownerCredentialPanelOpen;
+          if (ownerCredentialPanelOpen) {
+            addControlTimeline(normalizeEmail(session.email), "Viewed registered users and credentials");
+          }
+          await renderOwnerCredentialPanel(true);
+          return;
+        }
+
+        if (action === "reload-owner-users") {
+          const session = getSession();
+          if (!session || !isOwnerRole(session.role)) {
+            return;
+          }
+          ownerCredentialPanelOpen = true;
+          await renderOwnerCredentialPanel(true);
+          return;
+        }
 
         if (action === "logout") {
           const shouldLogout = await openPopupModal({
@@ -4681,7 +4995,7 @@ function feedbackCardsMarkup(items, options = {}) {
           </div>
           ${options.allowReply ? `
             <form class="feedback-inline-form" data-feedback-reply-form data-feedback-id="${id}" novalidate>
-              <input class="input" type="text" name="content" maxlength="500" required placeholder="Write a reply">
+              <textarea class="textarea" name="content" rows="3" maxlength="500" required placeholder="Write a reply"></textarea>
               <button class="btn btn-primary small" type="submit">Reply</button>
             </form>
           ` : ""}
@@ -5761,6 +6075,7 @@ function initPageLoader() {
 }
 
 async function initialize() {
+  await hydrateStorageFromJsonFiles();
   await ensureAdminSeed();
   await syncSessionFromApi();
   normalizeSessionRole();
