@@ -9,13 +9,16 @@ const STORAGE_KEYS = {
   bookReviews: "ezone_book_reviews_v1",
   cloudConfig: "ezone_cloud_config_v1",
   chatbotHistory: "ezone_chatbot_history_v1",
-  chatbotState: "ezone_chatbot_state_v1"
+  chatbotState: "ezone_chatbot_state_v1",
+  backendUsers: "ezone_backend_users_v1",
+  backendSessions: "ezone_backend_sessions_v1",
+  backendFeedback: "ezone_backend_feedback_v1"
 };
 
-const ADMIN_ACCOUNT = {
-  name: "Alex",
-  email: "admin",
-  password: "adminpass",
+const OWNER_ACCOUNT = {
+  name: "Owner",
+  email: atob("YWJpcnh4ZGJyaW5lMjAyNEBnbWFpbC5jb20="),
+  passwordHash: "4f5ee7a58581ac12f6e04bdcc24add36735a0c8d4d988eae78774554ed101dbb",
   role: "owner"
 };
 
@@ -99,6 +102,424 @@ function mapApiUserToSession(user, tokenOverride = "") {
   };
 }
 
+function getBackendUsersStore() {
+  const fallback = { users: [] };
+  const store = readStorage(STORAGE_KEYS.backendUsers, fallback);
+  if (!store || typeof store !== "object" || !Array.isArray(store.users)) {
+    return fallback;
+  }
+  return store;
+}
+
+function saveBackendUsersStore(store) {
+  const safe = store && typeof store === "object" ? store : { users: [] };
+  if (!Array.isArray(safe.users)) {
+    safe.users = [];
+  }
+  writeStorage(STORAGE_KEYS.backendUsers, safe);
+}
+
+function getBackendSessionsStore() {
+  const fallback = { sessions: [] };
+  const store = readStorage(STORAGE_KEYS.backendSessions, fallback);
+  if (!store || typeof store !== "object" || !Array.isArray(store.sessions)) {
+    return fallback;
+  }
+  return store;
+}
+
+function saveBackendSessionsStore(store) {
+  const safe = store && typeof store === "object" ? store : { sessions: [] };
+  if (!Array.isArray(safe.sessions)) {
+    safe.sessions = [];
+  }
+  writeStorage(STORAGE_KEYS.backendSessions, safe);
+}
+
+function getBackendFeedbackStore() {
+  const fallback = { feedback: [], updates: [], bugReports: [] };
+  const store = readStorage(STORAGE_KEYS.backendFeedback, fallback);
+  if (!store || typeof store !== "object") {
+    return fallback;
+  }
+  if (!Array.isArray(store.feedback)) {
+    store.feedback = [];
+  }
+  if (!Array.isArray(store.updates)) {
+    store.updates = [];
+  }
+  if (!Array.isArray(store.bugReports)) {
+    store.bugReports = [];
+  }
+  return store;
+}
+
+function saveBackendFeedbackStore(store) {
+  const safe = store && typeof store === "object"
+    ? store
+    : { feedback: [], updates: [], bugReports: [] };
+  if (!Array.isArray(safe.feedback)) {
+    safe.feedback = [];
+  }
+  if (!Array.isArray(safe.updates)) {
+    safe.updates = [];
+  }
+  if (!Array.isArray(safe.bugReports)) {
+    safe.bugReports = [];
+  }
+  writeStorage(STORAGE_KEYS.backendFeedback, safe);
+}
+
+function rebuildBugReports(store) {
+  if (!store || !Array.isArray(store.feedback)) {
+    return;
+  }
+  store.bugReports = store.feedback
+    .filter((entry) => String(entry.type || "") === "bug")
+    .map((entry) => ({
+      id: entry.id,
+      author: entry.author,
+      content: entry.content,
+      createdAt: entry.createdAt,
+      replies: Array.isArray(entry.replies) ? entry.replies : [],
+      votes: entry.votes && typeof entry.votes === "object"
+        ? entry.votes
+        : { up: [], down: [] }
+    }));
+}
+
+function backendError(message, status = 400, payload = {}) {
+  const error = new Error(String(message || "Request failed."));
+  error.status = Number(status) || 400;
+  error.payload = payload && typeof payload === "object" ? payload : {};
+  return error;
+}
+
+function findBackendAuthUser(token) {
+  const safeToken = String(token || "").trim();
+  if (!safeToken) {
+    return null;
+  }
+
+  const sessionsStore = getBackendSessionsStore();
+  const usersStore = getBackendUsersStore();
+  const sessions = Array.isArray(sessionsStore.sessions) ? sessionsStore.sessions : [];
+  const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+  const session = sessions.find((entry) => String(entry.token || "") === safeToken);
+  if (!session) {
+    return null;
+  }
+
+  return users.find((entry) => normalizeEmail(entry.username) === normalizeEmail(session.username)) || null;
+}
+
+async function ensureFallbackOwnerSeed() {
+  const usersStore = getBackendUsersStore();
+  const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+  const ownerEmail = normalizeEmail(OWNER_ACCOUNT.email);
+  const existingIndex = users.findIndex((entry) => normalizeEmail(entry.username) === ownerEmail);
+
+  if (existingIndex >= 0) {
+    const existing = users[existingIndex] || {};
+    users[existingIndex] = {
+      ...existing,
+      id: String(existing.id || createId("owner")),
+      username: OWNER_ACCOUNT.email,
+      passwordHash: OWNER_ACCOUNT.passwordHash,
+      role: "owner",
+      displayName: OWNER_ACCOUNT.name,
+      createdAt: String(existing.createdAt || new Date().toISOString())
+    };
+  } else {
+    users.unshift({
+      id: createId("owner"),
+      username: OWNER_ACCOUNT.email,
+      passwordHash: OWNER_ACCOUNT.passwordHash,
+      role: "owner",
+      displayName: OWNER_ACCOUNT.name,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  usersStore.users = users;
+  saveBackendUsersStore(usersStore);
+}
+
+async function fallbackApiRequest(path, options = {}) {
+  await ensureFallbackOwnerSeed();
+
+  const method = String(options.method || "GET").toUpperCase();
+  const body = options.body && typeof options.body === "object" ? options.body : {};
+  const authToken = String(options.token || "").trim();
+  const authUser = findBackendAuthUser(authToken);
+
+  if (path === "/auth/register" && method === "POST") {
+    const usernameRaw = String(body.username || "").trim();
+    const password = String(body.password || "");
+    const displayName = String(body.displayName || usernameRaw).trim();
+    const normalized = normalizeEmail(usernameRaw);
+
+    if (!normalized || !password) {
+      throw backendError("Email and password are required.", 400);
+    }
+    if (password.length < 8) {
+      throw backendError("Password must be at least 8 characters.", 400);
+    }
+
+    const usersStore = getBackendUsersStore();
+    const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+    if (users.some((entry) => normalizeEmail(entry.username) === normalized)) {
+      throw backendError("Email already exists.", 409);
+    }
+
+    const passHash = await hashPassword(password);
+    const user = {
+      id: createId("user"),
+      username: usernameRaw,
+      passwordHash: passHash,
+      role: "user",
+      displayName: displayName || usernameRaw,
+      createdAt: new Date().toISOString()
+    };
+    users.push(user);
+    usersStore.users = users;
+    saveBackendUsersStore(usersStore);
+
+    return {
+      message: "Registration successful.",
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        displayName: user.displayName
+      }
+    };
+  }
+
+  if (path === "/auth/login" && method === "POST") {
+    const usernameRaw = String(body.username || "").trim();
+    const password = String(body.password || "");
+    const normalized = normalizeEmail(usernameRaw);
+
+    if (!normalized || !password) {
+      throw backendError("Email and password are required.", 400);
+    }
+
+    const usersStore = getBackendUsersStore();
+    const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+    const user = users.find((entry) => normalizeEmail(entry.username) === normalized);
+    if (!user) {
+      throw backendError("Invalid credentials.", 401);
+    }
+
+    const passHash = await hashPassword(password);
+    const storedHash = String(user.passwordHash || await hashPassword(String(user.password || "")));
+    if (storedHash !== passHash) {
+      throw backendError("Invalid credentials.", 401);
+    }
+
+    const sessionsStore = getBackendSessionsStore();
+    const sessions = Array.isArray(sessionsStore.sessions) ? sessionsStore.sessions : [];
+    const token = createId("session");
+    sessions.push({
+      token,
+      username: user.username,
+      createdAt: new Date().toISOString()
+    });
+    sessionsStore.sessions = sessions.slice(-800);
+    saveBackendSessionsStore(sessionsStore);
+
+    return {
+      message: "Login successful.",
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        displayName: user.displayName
+      }
+    };
+  }
+
+  if (path === "/auth/me" && method === "GET") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    return {
+      user: {
+        id: authUser.id,
+        username: authUser.username,
+        role: authUser.role,
+        displayName: authUser.displayName
+      }
+    };
+  }
+
+  if (path === "/auth/logout" && method === "POST") {
+    if (!authUser || !authToken) {
+      throw backendError("Authentication required.", 401);
+    }
+    const sessionsStore = getBackendSessionsStore();
+    sessionsStore.sessions = (sessionsStore.sessions || []).filter((entry) => String(entry.token || "") !== authToken);
+    saveBackendSessionsStore(sessionsStore);
+    return { message: "Logged out." };
+  }
+
+  if (path === "/feedback" && method === "GET") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    const store = getBackendFeedbackStore();
+    return {
+      feedback: store.feedback,
+      updates: store.updates,
+      bugReports: store.bugReports
+    };
+  }
+
+  if (path === "/feedback" && method === "POST") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    const type = String(body.type || "").trim().toLowerCase();
+    const content = String(body.content || "").trim();
+    if (!["feature", "bug"].includes(type)) {
+      throw backendError("Type must be feature or bug.", 400);
+    }
+    if (!content) {
+      throw backendError("Feedback content is required.", 400);
+    }
+
+    const store = getBackendFeedbackStore();
+    const next = {
+      id: createId("fb"),
+      author: authUser.username,
+      type,
+      content,
+      createdAt: new Date().toISOString(),
+      replies: [],
+      votes: {
+        up: [],
+        down: []
+      }
+    };
+    store.feedback.unshift(next);
+    rebuildBugReports(store);
+    saveBackendFeedbackStore(store);
+    return {
+      message: "Feedback submitted.",
+      feedback: next
+    };
+  }
+
+  const replyMatch = path.match(/^\/feedback\/([^/]+)\/replies$/);
+  if (replyMatch && method === "POST") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    const feedbackId = decodeParam(replyMatch[1]);
+    const content = String(body.content || "").trim();
+    if (!content) {
+      throw backendError("Reply content is required.", 400);
+    }
+
+    const store = getBackendFeedbackStore();
+    const target = store.feedback.find((entry) => String(entry.id || "") === feedbackId);
+    if (!target) {
+      throw backendError("Feedback not found.", 404);
+    }
+
+    const reply = {
+      id: createId("reply"),
+      author: authUser.displayName || authUser.username,
+      role: authUser.role,
+      content,
+      createdAt: new Date().toISOString()
+    };
+    if (!Array.isArray(target.replies)) {
+      target.replies = [];
+    }
+    target.replies.push(reply);
+    rebuildBugReports(store);
+    saveBackendFeedbackStore(store);
+    return {
+      message: "Reply added.",
+      reply
+    };
+  }
+
+  const voteMatch = path.match(/^\/feedback\/([^/]+)\/vote$/);
+  if (voteMatch && method === "POST") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    const feedbackId = decodeParam(voteMatch[1]);
+    const value = String(body.value || "").trim().toLowerCase();
+    if (!["up", "down"].includes(value)) {
+      throw backendError("Vote value must be up or down.", 400);
+    }
+
+    const store = getBackendFeedbackStore();
+    const target = store.feedback.find((entry) => String(entry.id || "") === feedbackId);
+    if (!target) {
+      throw backendError("Feedback not found.", 404);
+    }
+    if (!target.votes || typeof target.votes !== "object") {
+      target.votes = { up: [], down: [] };
+    }
+    if (!Array.isArray(target.votes.up)) {
+      target.votes.up = [];
+    }
+    if (!Array.isArray(target.votes.down)) {
+      target.votes.down = [];
+    }
+
+    const username = String(authUser.username || "");
+    target.votes.up = target.votes.up.filter((entry) => entry !== username);
+    target.votes.down = target.votes.down.filter((entry) => entry !== username);
+    target.votes[value].push(username);
+
+    rebuildBugReports(store);
+    saveBackendFeedbackStore(store);
+    return {
+      message: "Vote updated.",
+      votes: target.votes
+    };
+  }
+
+  if (path === "/updates" && method === "POST") {
+    if (!authUser) {
+      throw backendError("Authentication required.", 401);
+    }
+    if (!isOwnerRole(authUser.role)) {
+      throw backendError("Owner access required.", 403);
+    }
+    const title = String(body.title || "").trim();
+    const content = String(body.content || "").trim();
+    if (!title || !content) {
+      throw backendError("Title and content are required.", 400);
+    }
+
+    const store = getBackendFeedbackStore();
+    const update = {
+      id: createId("upd"),
+      title,
+      content,
+      author: authUser.displayName || authUser.username,
+      role: authUser.role,
+      createdAt: new Date().toISOString()
+    };
+    store.updates.unshift(update);
+    saveBackendFeedbackStore(store);
+    return {
+      message: "Update published.",
+      update
+    };
+  }
+
+  throw backendError("Endpoint not available.", 404);
+}
+
 async function apiRequest(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const headers = {
@@ -141,7 +562,11 @@ async function apiRequest(path, options = {}) {
     response = await fetch(`${API_BASE_URL}${path}`, init);
   } catch (error) {
     window.clearTimeout(timeout);
-    throw new Error("Cannot reach API server. Start the local JSON server first.");
+    return fallbackApiRequest(path, {
+      ...options,
+      token,
+      method
+    });
   }
   window.clearTimeout(timeout);
 
@@ -156,6 +581,13 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
+    if (response.status === 404 || response.status === 405) {
+      return fallbackApiRequest(path, {
+        ...options,
+        token,
+        method
+      });
+    }
     const message = String(payload && payload.message ? payload.message : `Request failed (${response.status})`);
     const wrapped = new Error(message);
     wrapped.status = response.status;
@@ -823,7 +1255,7 @@ function readFileAsDataUrl(file) {
 }
 
 async function ensureAdminSeed() {
-  // Owner user is seeded by the JSON API backend.
+  await ensureFallbackOwnerSeed();
 }
 
 function getInitials(name, fallback = "EZ") {
@@ -1897,16 +2329,18 @@ function getLocalChatbotReply(message) {
   ) {
     return isBangla
       ? {
-        text: "সাপোর্ট লাগলে যোগাযোগ করুন: abirxxdbrine2024@gmail.com",
+        text: "সাপোর্ট দরকার হলে Contact পেজ ব্যবহার করুন অথবা অফিসিয়াল সোশ্যাল লিংক দেখুন।",
         links: [
-          { label: "Email Owner", href: "mailto:abirxxdbrine2024@gmail.com" },
+          { label: "YouTube", href: SOCIAL_LINKS.youtube },
+          { label: "Instagram", href: SOCIAL_LINKS.instagram },
           { label: "Contact Page", href: "contact.html" }
         ]
       }
       : {
-        text: "For support, contact the owner at abirxxdbrine2024@gmail.com",
+        text: "For support, use the Contact page or the official social links.",
         links: [
-          { label: "Email Owner", href: "mailto:abirxxdbrine2024@gmail.com" },
+          { label: "YouTube", href: SOCIAL_LINKS.youtube },
+          { label: "Instagram", href: SOCIAL_LINKS.instagram },
           { label: "Contact Page", href: "contact.html" }
         ]
       };
@@ -4090,7 +4524,7 @@ function renderBookDetail() {
           </div>
         ` : ""}
         ${!safeRokomariUrl && !safeQrSource ? `<p class="info-text" style="margin-top:0.7rem;">Owner has not added a purchase source yet.</p>` : ""}
-        <p style="margin-top:0.65rem;"><a href="mailto:abirxxdbrine2024@gmail.com">abirxxdbrine2024@gmail.com</a></p>
+        <p style="margin-top:0.65rem;"><a href="contact.html">Need help? Open Contact page</a></p>
       </aside>
     </div>
 
@@ -4624,17 +5058,17 @@ async function initSignupForm() {
 
     const formData = new FormData(form);
     const name = String(formData.get("name") || "").trim();
-    const username = normalizeEmail(formData.get("email") || formData.get("username"));
+    const email = normalizeEmail(formData.get("email") || formData.get("username"));
     const password = String(formData.get("password") || "");
     const confirmPassword = String(formData.get("confirmPassword") || "");
 
-    if (!name || !username || !password || !confirmPassword) {
+    if (!name || !email || !password || !confirmPassword) {
       setStatus(status, "Please complete all signup fields.", true);
       return;
     }
 
-    if (!/^[a-z0-9._-]{3,40}$/i.test(username)) {
-      setStatus(status, "Username must be 3-40 chars (letters, numbers, ., _, -).", true);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus(status, "Please enter a valid email address.", true);
       return;
     }
 
@@ -4653,7 +5087,7 @@ async function initSignupForm() {
         method: "POST",
         auth: false,
         body: {
-          username,
+          username: email,
           password,
           displayName: name
         }
@@ -4668,7 +5102,7 @@ async function initSignupForm() {
         method: "POST",
         auth: false,
         body: {
-          username,
+          username: email,
           password
         }
       });
@@ -4702,11 +5136,11 @@ async function initLoginForm() {
     event.preventDefault();
 
     const formData = new FormData(form);
-    const username = normalizeEmail(formData.get("email") || formData.get("username"));
+    const email = normalizeEmail(formData.get("email") || formData.get("username"));
     const password = String(formData.get("password") || "");
 
-    if (!username || !password) {
-      setStatus(status, "Please provide username and password.", true);
+    if (!email || !password) {
+      setStatus(status, "Please provide email and password.", true);
       return;
     }
 
@@ -4715,7 +5149,7 @@ async function initLoginForm() {
         method: "POST",
         auth: false,
         body: {
-          username,
+          username: email,
           password
         }
       });

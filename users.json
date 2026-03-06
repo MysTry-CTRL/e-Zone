@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "id": "owner-1",
+      "username": "abirxxdbrine2024@gmail.com",
+      "passwordHash": "4f5ee7a58581ac12f6e04bdcc24add36735a0c8d4d988eae78774554ed101dbb",
+      "role": "owner",
+      "displayName": "Owner"
+    }
+  ]
+}
