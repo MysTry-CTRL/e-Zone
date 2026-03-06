@@ -19,17 +19,20 @@ const JSON_BOOTSTRAP_SOURCES = [
   {
     key: STORAGE_KEYS.backendUsers,
     file: "users.json",
-    fallback: { users: [] }
+    fallback: { users: [] },
+    seedOnly: true
   },
   {
     key: STORAGE_KEYS.backendSessions,
     file: "sessions.json",
-    fallback: { sessions: [] }
+    fallback: { sessions: [] },
+    seedOnly: true
   },
   {
     key: STORAGE_KEYS.backendFeedback,
     file: "feedback.json",
-    fallback: { feedback: [], updates: [], bugReports: [] }
+    fallback: { feedback: [], updates: [], bugReports: [] },
+    seedOnly: true
   },
   {
     key: STORAGE_KEYS.users,
@@ -828,6 +831,14 @@ function cloneJsonValue(value) {
   }
 }
 
+function hasLocalStorageValue(key) {
+  try {
+    return localStorage.getItem(String(key || "")) !== null;
+  } catch (error) {
+    return false;
+  }
+}
+
 async function fetchJsonBootstrap(file, fallback, stamp) {
   const response = await fetch(`${file}?refresh=${stamp}`, {
     cache: "no-store",
@@ -856,13 +867,20 @@ async function hydrateStorageFromJsonFiles() {
   const stamp = Date.now();
   const jobs = JSON_BOOTSTRAP_SOURCES.map(async (source) => {
     const fallback = cloneJsonValue(source.fallback);
+    const hasExistingValue = hasLocalStorageValue(source.key);
     try {
       const payload = await fetchJsonBootstrap(source.file, fallback, stamp);
+      if (source.seedOnly && hasExistingValue) {
+        return;
+      }
       if (payload === null && source.preserveWhenNull) {
         return;
       }
       writeStorage(source.key, payload);
     } catch (error) {
+      if (source.seedOnly && hasExistingValue) {
+        return;
+      }
       if (source.preserveWhenNull) {
         return;
       }

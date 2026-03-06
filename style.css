@@ -316,6 +316,18 @@ h6,
   color: color-mix(in srgb, var(--loader-ink) 78%, transparent);
 }
 
+.loader-dots {
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: loaderDots 1.2s steps(4, end) infinite;
+}
+
+.loader-dots::before {
+  content: "...";
+}
+
 .glass {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -1636,6 +1648,15 @@ h6,
 @keyframes spinReverse {
   100% {
     transform: rotate(-360deg);
+  }
+}
+
+@keyframes loaderDots {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 3ch;
   }
 }
 
