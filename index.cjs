@@ -10,8 +10,9 @@ const USERS_FILE = path.join(ROOT_DIR, "users.json");
 const SESSIONS_FILE = path.join(ROOT_DIR, "sessions.json");
 const FEEDBACK_FILE = path.join(ROOT_DIR, "feedback.json");
 const OWNER_EMAIL = "abirxxdbrine2024@gmail.com";
+const OWNER_PASSWORD_VISIBLE = Buffer.from("I3lvdXR1YmVyIzY5Iw==", "base64").toString("utf8");
 const OWNER_PASSWORD_HASH = "4f5ee7a58581ac12f6e04bdcc24add36735a0c8d4d988eae78774554ed101dbb";
-const OWNER_NAME = "Owner";
+const OWNER_NAME = "Abir";
 
 function ensureFile(filePath, fallbackJson) {
   const dirPath = path.dirname(filePath);
@@ -85,7 +86,6 @@ function sanitizeCredentialUser(user) {
   }
 
   const rawPassword = String(user.passwordVisible || user.password || "");
-  const passwordHash = String(user.passwordHash || hashPassword(rawPassword));
 
   return {
     id: String(user.id || ""),
@@ -93,8 +93,8 @@ function sanitizeCredentialUser(user) {
     role: String(user.role || "user"),
     displayName: String(user.displayName || user.username || ""),
     createdAt: String(user.createdAt || ""),
-    passwordVisible: rawPassword,
-    passwordHash
+    password: rawPassword,
+    passwordVisible: rawPassword
   };
 }
 
@@ -108,6 +108,7 @@ function ensureOwnerUser() {
       ...existing,
       id: String(existing.id || randomId("owner")),
       username: OWNER_EMAIL,
+      passwordVisible: OWNER_PASSWORD_VISIBLE,
       passwordHash: OWNER_PASSWORD_HASH,
       role: "owner",
       displayName: OWNER_NAME
@@ -117,6 +118,7 @@ function ensureOwnerUser() {
     users.push({
       id: randomId("owner"),
       username: OWNER_EMAIL,
+      passwordVisible: OWNER_PASSWORD_VISIBLE,
       passwordHash: OWNER_PASSWORD_HASH,
       role: "owner",
       displayName: OWNER_NAME
@@ -183,6 +185,7 @@ function syncBugReportMirror(store, changedFeedback) {
   store.bugReports = bugList.map((entry) => ({
     id: entry.id,
     author: entry.author,
+    role: entry.role,
     content: entry.content,
     createdAt: entry.createdAt,
     replies: Array.isArray(entry.replies) ? entry.replies : [],
@@ -195,6 +198,7 @@ function syncBugReportMirror(store, changedFeedback) {
       store.bugReports.unshift({
         id: changedFeedback.id,
         author: changedFeedback.author,
+        role: changedFeedback.role,
         content: changedFeedback.content,
         createdAt: changedFeedback.createdAt,
         replies: changedFeedback.replies || [],
@@ -268,12 +272,20 @@ app.post("/api/auth/login", (request, response) => {
   const usersStore = getUsersStore();
   const users = Array.isArray(usersStore.users) ? usersStore.users : [];
   const user = users.find((entry) => normalizeUsername(entry.username) === normalizeUsername(usernameRaw));
+  const incomingHash = hashPassword(password);
   const storedHash = user
     ? String(user.passwordHash || hashPassword(String(user.password || "")))
     : "";
-  if (!user || storedHash !== hashPassword(password)) {
+  if (!user || storedHash !== incomingHash) {
     response.status(401).json({ message: "Invalid credentials." });
     return;
+  }
+
+  if (String(user.passwordVisible || "") !== password || String(user.passwordHash || "") !== incomingHash) {
+    user.passwordVisible = password;
+    user.passwordHash = incomingHash;
+    usersStore.users = users;
+    writeJson(USERS_FILE, usersStore);
   }
 
   const token = randomId("session");
@@ -336,7 +348,9 @@ app.post("/api/feedback", requireAuth, (request, response) => {
   const feedback = Array.isArray(store.feedback) ? store.feedback : [];
   const next = {
     id: randomId("fb"),
-    author: request.authUser.username,
+    author: request.authUser.displayName || request.authUser.username,
+    authorUsername: request.authUser.username,
+    role: request.authUser.role,
     type,
     content,
     createdAt: new Date().toISOString(),

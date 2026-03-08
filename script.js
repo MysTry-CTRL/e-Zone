@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   controlCenterLogs: "ezone_control_center_logs_v1",
   bookReviews: "ezone_book_reviews_v1",
   cloudConfig: "ezone_cloud_config_v1",
+  rokomariRedirects: "ezone_rokomari_redirects_v1",
   chatbotHistory: "ezone_chatbot_history_v1",
   chatbotState: "ezone_chatbot_state_v1",
   backendUsers: "ezone_backend_users_v1",
@@ -61,9 +62,16 @@ const JSON_BOOTSTRAP_SOURCES = [
     fallback: {}
   },
   {
+    key: STORAGE_KEYS.rokomariRedirects,
+    file: "storage-rokomari-redirects.json",
+    fallback: [],
+    seedOnly: true
+  },
+  {
     key: STORAGE_KEYS.accountPrefs,
     file: "storage-account-prefs.json",
-    fallback: {}
+    fallback: {},
+    seedOnly: true
   },
   {
     key: STORAGE_KEYS.controlCenterLogs,
@@ -90,19 +98,45 @@ const JSON_BOOTSTRAP_SOURCES = [
   {
     key: STORAGE_KEYS.theme,
     file: "storage-theme.json",
-    fallback: ""
+    fallback: "",
+    seedOnly: true
   }
 ];
 
 const OWNER_ACCOUNT = {
-  name: "Owner",
+  name: "Abir",
   email: atob("YWJpcnh4ZGJyaW5lMjAyNEBnbWFpbC5jb20="),
+  passwordVisible: atob("I3lvdXR1YmVyIzY5Iw=="),
   passwordHash: "4f5ee7a58581ac12f6e04bdcc24add36735a0c8d4d988eae78774554ed101dbb",
   role: "owner"
 };
 
 const API_BASE_URL = "/api";
 const API_TIMEOUT_MS = 16000;
+const HOVER_HELP_TARGET_SELECTOR = [
+  "[data-hover-text]",
+  "[data-hover-hint]",
+  "[data-tooltip]",
+  "a[href]",
+  "button",
+  "[role=\"button\"]",
+  "input",
+  "textarea",
+  "select",
+  ".custom-select-trigger",
+  ".custom-file-ui",
+  ".custom-file-trigger",
+  ".custom-file-name"
+].join(", ");
+
+const hoverHelpState = {
+  modal: null,
+  label: null,
+  message: null,
+  activeTarget: null,
+  activeText: "",
+  hideTimer: 0
+};
 
 function isOwnerRole(role) {
   const normalized = String(role || "").trim().toLowerCase();
@@ -155,6 +189,25 @@ function escapeHtml(value) {
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function toRoleLabel(role) {
+  return isOwnerRole(role) ? "Owner" : "User";
+}
+
+function extractFirstName(identity, fallback = "Reader") {
+  const raw = String(identity || "").trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  const base = raw.includes("@") ? raw.split("@")[0] : raw;
+  const first = base.split(/\s+/).filter(Boolean)[0] || "";
+  if (!first) {
+    return fallback;
+  }
+
+  return first.charAt(0).toUpperCase() + first.slice(1);
 }
 
 function getSessionToken() {
@@ -258,6 +311,7 @@ function rebuildBugReports(store) {
     .map((entry) => ({
       id: entry.id,
       author: entry.author,
+      role: normalizeRole(entry.role),
       content: entry.content,
       createdAt: entry.createdAt,
       replies: Array.isArray(entry.replies) ? entry.replies : [],
@@ -292,6 +346,62 @@ function findBackendAuthUser(token) {
   return users.find((entry) => normalizeEmail(entry.username) === normalizeEmail(session.username)) || null;
 }
 
+function mirrorActiveSessionIntoFallback(tokenHint = "") {
+  const session = getSession();
+  if (!session || typeof session !== "object") {
+    return;
+  }
+
+  const token = String(tokenHint || session.token || "").trim();
+  const username = String(session.username || session.email || "").trim();
+  if (!token || !username) {
+    return;
+  }
+
+  const usersStore = getBackendUsersStore();
+  const users = Array.isArray(usersStore.users) ? usersStore.users : [];
+  const userIndex = users.findIndex((entry) => normalizeEmail(entry.username) === normalizeEmail(username));
+  const sessionRole = normalizeRole(session.role);
+  const sessionName = String(session.name || username).trim();
+
+  if (userIndex >= 0) {
+    const existing = users[userIndex] || {};
+    users[userIndex] = {
+      ...existing,
+      id: String(existing.id || createId("user")),
+      username: username,
+      role: sessionRole,
+      displayName: sessionName,
+      createdAt: String(existing.createdAt || new Date().toISOString())
+    };
+  } else {
+    users.push({
+      id: createId("user"),
+      username: username,
+      passwordVisible: "",
+      passwordHash: "",
+      role: sessionRole,
+      displayName: sessionName,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  usersStore.users = users;
+  saveBackendUsersStore(usersStore);
+
+  const sessionsStore = getBackendSessionsStore();
+  const sessions = Array.isArray(sessionsStore.sessions) ? sessionsStore.sessions : [];
+  if (!sessions.some((entry) => String(entry.token || "") === token)) {
+    sessions.push({
+      token,
+      username,
+      createdAt: new Date().toISOString()
+    });
+    sessionsStore.sessions = sessions.slice(-800);
+    saveBackendSessionsStore(sessionsStore);
+  }
+}
+
 async function ensureFallbackOwnerSeed() {
   const usersStore = getBackendUsersStore();
   const users = Array.isArray(usersStore.users) ? usersStore.users : [];
@@ -304,6 +414,7 @@ async function ensureFallbackOwnerSeed() {
       ...existing,
       id: String(existing.id || createId("owner")),
       username: OWNER_ACCOUNT.email,
+      passwordVisible: OWNER_ACCOUNT.passwordVisible,
       passwordHash: OWNER_ACCOUNT.passwordHash,
       role: "owner",
       displayName: OWNER_ACCOUNT.name,
@@ -313,6 +424,7 @@ async function ensureFallbackOwnerSeed() {
     users.unshift({
       id: createId("owner"),
       username: OWNER_ACCOUNT.email,
+      passwordVisible: OWNER_ACCOUNT.passwordVisible,
       passwordHash: OWNER_ACCOUNT.passwordHash,
       role: "owner",
       displayName: OWNER_ACCOUNT.name,
@@ -398,6 +510,13 @@ async function fallbackApiRequest(path, options = {}) {
       throw backendError("Invalid credentials.", 401);
     }
 
+    if (String(user.passwordVisible || "") !== password || String(user.passwordHash || "") !== passHash) {
+      user.passwordVisible = password;
+      user.passwordHash = passHash;
+      usersStore.users = users;
+      saveBackendUsersStore(usersStore);
+    }
+
     const sessionsStore = getBackendSessionsStore();
     const sessions = Array.isArray(sessionsStore.sessions) ? sessionsStore.sessions : [];
     const token = createId("session");
@@ -473,7 +592,9 @@ async function fallbackApiRequest(path, options = {}) {
     const store = getBackendFeedbackStore();
     const next = {
       id: createId("fb"),
-      author: authUser.username,
+      author: authUser.displayName || authUser.username,
+      authorUsername: authUser.username,
+      role: normalizeRole(authUser.role),
       type,
       content,
       createdAt: new Date().toISOString(),
@@ -607,23 +728,18 @@ async function fallbackApiRequest(path, options = {}) {
 
     const usersStore = getBackendUsersStore();
     const users = Array.isArray(usersStore.users) ? usersStore.users : [];
-    const serialized = await Promise.all(users.map(async (entry) => {
+    const serialized = users.map((entry) => {
       const rawPassword = String(entry.passwordVisible || entry.password || "");
-      const passwordHash = String(
-        entry.passwordHash
-        || (rawPassword ? await hashPassword(rawPassword) : "")
-      );
-
       return {
         id: String(entry.id || ""),
         username: String(entry.username || ""),
         role: normalizeRole(entry.role),
         displayName: String(entry.displayName || entry.username || ""),
         createdAt: String(entry.createdAt || ""),
-        passwordVisible: rawPassword,
-        passwordHash
+        password: rawPassword,
+        passwordVisible: rawPassword
       };
-    }));
+    });
 
     return { users: serialized };
   }
@@ -642,6 +758,19 @@ async function apiRequest(path, options = {}) {
     options.token
     || (options.auth === false ? "" : getSessionToken())
   ).trim();
+
+  const normalizedPath = String(path || "").trim();
+  const useLocalFeedbackStore = normalizedPath === "/feedback"
+    || normalizedPath.startsWith("/feedback/")
+    || normalizedPath === "/updates";
+  if (useLocalFeedbackStore) {
+    mirrorActiveSessionIntoFallback(token);
+    return fallbackApiRequest(path, {
+      ...options,
+      token,
+      method
+    });
+  }
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -1258,6 +1387,7 @@ function getAccountPrefs(userId) {
     bio: "",
     accent: "",
     profileImage: "",
+    themeMode: "",
     compact: false,
     layoutDensity: "comfortable",
     glowIntensity: 70,
@@ -1287,6 +1417,7 @@ function getAccountPrefs(userId) {
     bio: String(saved.bio || ""),
     accent: String(saved.accent || ""),
     profileImage: normalizeProfileImageData(saved.profileImage),
+    themeMode: saved.themeMode === "dark" || saved.themeMode === "light" ? saved.themeMode : "",
     compact: Boolean(saved.compact),
     layoutDensity: saved.layoutDensity === "compact" ? "compact" : "comfortable",
     glowIntensity: Math.min(100, Math.max(0, Number(saved.glowIntensity) || 70)),
@@ -1319,6 +1450,7 @@ function setAccountPrefs(userId, prefs) {
     bio: String(merged.bio || ""),
     accent: String(merged.accent || ""),
     profileImage: normalizeProfileImageData(merged.profileImage),
+    themeMode: merged.themeMode === "dark" || merged.themeMode === "light" ? merged.themeMode : "",
     compact: Boolean(merged.compact),
     layoutDensity: merged.layoutDensity === "compact" ? "compact" : "comfortable",
     glowIntensity: Math.min(100, Math.max(0, Number(merged.glowIntensity) || 70)),
@@ -1498,6 +1630,15 @@ function getStoredTheme() {
   return stored === "dark" || stored === "light" ? stored : "";
 }
 
+function getSessionThemePreference() {
+  const session = getSession();
+  if (!session || !session.id) {
+    return "";
+  }
+  const prefs = getAccountPrefs(session.id);
+  return prefs.themeMode === "dark" || prefs.themeMode === "light" ? prefs.themeMode : "";
+}
+
 function themeIconSvg(kind) {
   if (kind === "moon") {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.9 14.2A9 9 0 1 1 9.8 3.1a.8.8 0 0 1 1 .95A7 7 0 0 0 19.95 13a.8.8 0 0 1 .95 1.2z" fill="currentColor"/></svg>';
@@ -1563,13 +1704,19 @@ function updateThemeToggleLabels(theme) {
   });
 }
 
-function applyTheme(theme) {
+function applyTheme(theme, options = {}) {
   const mode = theme === "dark" ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", mode);
   if (document.body) {
     document.body.setAttribute("data-theme", mode);
   }
   writeStorage(STORAGE_KEYS.theme, mode);
+  if (options.persistAccount !== false) {
+    const session = getSession();
+    if (session && session.id) {
+      setAccountPrefs(session.id, { themeMode: mode });
+    }
+  }
   updateThemeToggleLabels(mode);
 }
 
@@ -1580,7 +1727,7 @@ function toggleTheme() {
 
 function initThemeToggle() {
   ensureNavThemeToggle();
-  const saved = getStoredTheme();
+  const saved = getSessionThemePreference() || getStoredTheme();
   applyTheme(saved || getPreferredTheme());
 }
 
@@ -1701,10 +1848,15 @@ function initUniversalScrollAnimations() {
   document.body.dataset.scrollAnimationsBound = "1";
 
   let lastY = window.scrollY || document.documentElement.scrollTop || 0;
+  const coarsePointer = Boolean(
+    window.matchMedia
+    && window.matchMedia("(hover: none), (pointer: coarse)").matches
+  );
+  const minDirectionDelta = coarsePointer ? 10 : 3;
   const updateScrollDirection = () => {
     const current = window.scrollY || document.documentElement.scrollTop || 0;
     const delta = current - lastY;
-    if (Math.abs(delta) < 2) {
+    if (Math.abs(delta) < minDirectionDelta) {
       return;
     }
 
@@ -2069,6 +2221,338 @@ function initCustomFileInputs() {
 
     nativeInput.addEventListener("change", updateLabel);
     updateLabel();
+  });
+}
+
+function compactHoverHelpText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function truncateHoverHelpText(value, maxLength = 96) {
+  const text = compactHoverHelpText(value);
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength - 1).trim()}…`;
+}
+
+function getLabelForControl(control) {
+  if (!(control instanceof HTMLElement)) {
+    return "";
+  }
+
+  const explicit = compactHoverHelpText(control.getAttribute("data-hover-label") || control.getAttribute("aria-label"));
+  if (explicit) {
+    return explicit;
+  }
+
+  const controlId = String(control.getAttribute("id") || "").trim();
+  if (controlId) {
+    const labelFor = Array.from(document.querySelectorAll("label[for]"))
+      .find((label) => String(label.getAttribute("for") || "").trim() === controlId);
+    if (labelFor instanceof HTMLElement) {
+      const text = compactHoverHelpText(labelFor.textContent);
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  const wrappingLabel = control.closest("label");
+  if (wrappingLabel instanceof HTMLElement) {
+    const text = compactHoverHelpText(wrappingLabel.textContent);
+    if (text) {
+      return text;
+    }
+  }
+
+  if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+    const placeholder = compactHoverHelpText(control.getAttribute("placeholder"));
+    if (placeholder) {
+      return placeholder;
+    }
+  }
+
+  return "";
+}
+
+function resolveHoverHostElement(element) {
+  if (!(element instanceof Element)) {
+    return null;
+  }
+  if (element.closest("[data-hover-help-modal]")) {
+    return null;
+  }
+  const host = element.closest(HOVER_HELP_TARGET_SELECTOR);
+  if (!(host instanceof HTMLElement)) {
+    return null;
+  }
+  if (host.matches("[type=\"hidden\"], :disabled") || host.getAttribute("aria-disabled") === "true") {
+    return null;
+  }
+  return host;
+}
+
+function resolveNativeFieldFromHost(host) {
+  if (!(host instanceof HTMLElement)) {
+    return null;
+  }
+
+  if (host.matches("input, textarea, select")) {
+    return host;
+  }
+
+  if (host.matches(".custom-select-trigger")) {
+    const nativeSelect = host.closest(".custom-select")?.querySelector("select");
+    if (nativeSelect instanceof HTMLSelectElement) {
+      return nativeSelect;
+    }
+  }
+
+  if (host.matches(".custom-file-ui, .custom-file-trigger, .custom-file-name")) {
+    const nativeFile = host.closest(".custom-file-control")?.querySelector("input[type=\"file\"]");
+    if (nativeFile instanceof HTMLInputElement) {
+      return nativeFile;
+    }
+  }
+
+  return null;
+}
+
+function extractExplicitHoverHelpText(host) {
+  if (!(host instanceof HTMLElement)) {
+    return "";
+  }
+
+  const candidates = [
+    host.getAttribute("data-hover-text"),
+    host.getAttribute("data-hover-hint"),
+    host.getAttribute("data-tooltip")
+  ];
+  const explicit = candidates.map((value) => compactHoverHelpText(value)).find(Boolean);
+  if (explicit) {
+    return explicit;
+  }
+
+  const nativeTitle = compactHoverHelpText(host.getAttribute("title"));
+  if (nativeTitle) {
+    if (!host.hasAttribute("data-hover-text")) {
+      host.setAttribute("data-hover-text", nativeTitle);
+    }
+    host.removeAttribute("title");
+    return nativeTitle;
+  }
+
+  return "";
+}
+
+function buildHoverHelpPayload(host) {
+  if (!(host instanceof HTMLElement)) {
+    return null;
+  }
+
+  const explicit = extractExplicitHoverHelpText(host);
+  if (explicit) {
+    return { kind: "info", text: truncateHoverHelpText(explicit) };
+  }
+
+  const nativeField = resolveNativeFieldFromHost(host);
+  if (nativeField && nativeField.hasAttribute("required")) {
+    return { kind: "required", text: "Please fill this section." };
+  }
+
+  if (host.matches("a[href]")) {
+    const label = truncateHoverHelpText(getLabelForControl(host) || host.textContent || "this section");
+    return { kind: "link", text: `Open ${label}.` };
+  }
+
+  if (host.matches("button, [role=\"button\"], .custom-select-trigger, .custom-file-ui, .custom-file-trigger")) {
+    const controlTarget = nativeField instanceof HTMLElement ? nativeField : host;
+    const label = truncateHoverHelpText(getLabelForControl(controlTarget) || host.textContent || "this control");
+    return { kind: "action", text: `Use ${label}.` };
+  }
+
+  return null;
+}
+
+function ensureHoverHelpModal() {
+  if (hoverHelpState.modal instanceof HTMLElement) {
+    return hoverHelpState.modal;
+  }
+
+  const existing = document.querySelector("[data-hover-help-modal]");
+  if (existing instanceof HTMLElement) {
+    hoverHelpState.modal = existing;
+    hoverHelpState.label = existing.querySelector("[data-hover-help-label]");
+    hoverHelpState.message = existing.querySelector("[data-hover-help-message]");
+    return existing;
+  }
+
+  const modal = document.createElement("aside");
+  modal.className = "hover-help-modal";
+  modal.dataset.hoverHelpModal = "1";
+  modal.dataset.kind = "info";
+  modal.setAttribute("aria-hidden", "true");
+  modal.innerHTML = `
+    <p class="hover-help-label" data-hover-help-label>Hint</p>
+    <p class="hover-help-message" data-hover-help-message></p>
+  `;
+  document.body.appendChild(modal);
+
+  hoverHelpState.modal = modal;
+  hoverHelpState.label = modal.querySelector("[data-hover-help-label]");
+  hoverHelpState.message = modal.querySelector("[data-hover-help-message]");
+  return modal;
+}
+
+function showHoverHelpModal(host, payload) {
+  if (!(host instanceof HTMLElement) || !payload || !payload.text) {
+    return;
+  }
+
+  const modal = ensureHoverHelpModal();
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  if (hoverHelpState.hideTimer) {
+    window.clearTimeout(hoverHelpState.hideTimer);
+    hoverHelpState.hideTimer = 0;
+  }
+
+  const nextText = String(payload.text || "");
+  if (hoverHelpState.activeTarget === host && hoverHelpState.activeText === nextText && modal.classList.contains("show")) {
+    return;
+  }
+
+  const labelText = payload.kind === "required"
+    ? "Required Field"
+    : payload.kind === "link"
+      ? "Link"
+      : payload.kind === "action"
+        ? "Action"
+        : "Hint";
+
+  if (hoverHelpState.label instanceof HTMLElement) {
+    hoverHelpState.label.textContent = labelText;
+  }
+  if (hoverHelpState.message instanceof HTMLElement) {
+    hoverHelpState.message.textContent = nextText;
+  }
+
+  modal.dataset.kind = String(payload.kind || "info");
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+  hoverHelpState.activeTarget = host;
+  hoverHelpState.activeText = nextText;
+}
+
+function hideHoverHelpModal(immediate = false) {
+  const modal = hoverHelpState.modal;
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  if (hoverHelpState.hideTimer) {
+    window.clearTimeout(hoverHelpState.hideTimer);
+    hoverHelpState.hideTimer = 0;
+  }
+
+  const close = () => {
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    hoverHelpState.activeTarget = null;
+    hoverHelpState.activeText = "";
+  };
+
+  if (immediate) {
+    close();
+    return;
+  }
+
+  hoverHelpState.hideTimer = window.setTimeout(() => {
+    close();
+  }, 120);
+}
+
+function initHoverHelpModals() {
+  if (!document.body || document.body.dataset.hoverHelpBound === "1") {
+    return;
+  }
+  document.body.dataset.hoverHelpBound = "1";
+
+  ensureHoverHelpModal();
+
+  document.querySelectorAll("[title]").forEach((node) => {
+    if (!(node instanceof HTMLElement) || node.closest("svg")) {
+      return;
+    }
+    const titleText = compactHoverHelpText(node.getAttribute("title"));
+    if (!titleText) {
+      return;
+    }
+    if (!node.hasAttribute("data-hover-text")) {
+      node.setAttribute("data-hover-text", titleText);
+    }
+    node.removeAttribute("title");
+  });
+
+  document.addEventListener("mouseover", (event) => {
+    const host = resolveHoverHostElement(event.target);
+    if (!host) {
+      return;
+    }
+    const payload = buildHoverHelpPayload(host);
+    if (!payload) {
+      return;
+    }
+    showHoverHelpModal(host, payload);
+  }, true);
+
+  document.addEventListener("mouseout", (event) => {
+    const host = resolveHoverHostElement(event.target);
+    if (!host || hoverHelpState.activeTarget !== host) {
+      return;
+    }
+    const related = resolveHoverHostElement(event.relatedTarget);
+    if (related === host) {
+      return;
+    }
+    hideHoverHelpModal();
+  }, true);
+
+  document.addEventListener("focusin", (event) => {
+    const host = resolveHoverHostElement(event.target);
+    if (!host) {
+      return;
+    }
+    const payload = buildHoverHelpPayload(host);
+    if (!payload) {
+      return;
+    }
+    showHoverHelpModal(host, payload);
+  }, true);
+
+  document.addEventListener("focusout", (event) => {
+    const host = resolveHoverHostElement(event.target);
+    if (!host || hoverHelpState.activeTarget !== host) {
+      return;
+    }
+    const related = resolveHoverHostElement(event.relatedTarget);
+    if (related === host) {
+      return;
+    }
+    hideHoverHelpModal();
+  }, true);
+
+  window.addEventListener("scroll", () => {
+    hideHoverHelpModal();
+  }, { passive: true });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hideHoverHelpModal(true);
+    }
   });
 }
 
@@ -3191,6 +3675,53 @@ function saveControlCenterLogs(logs) {
   writeStorage(STORAGE_KEYS.controlCenterLogs, logs);
 }
 
+function getRokomariRedirectLogs() {
+  const stored = readStorage(STORAGE_KEYS.rokomariRedirects, []);
+  if (!Array.isArray(stored)) {
+    return [];
+  }
+
+  return stored
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => ({
+      id: String(entry.id || createId("rlog")),
+      time: String(entry.time || ""),
+      userEmail: String(entry.userEmail || ""),
+      bookId: String(entry.bookId || ""),
+      bookTitle: String(entry.bookTitle || "Book"),
+      rokomariUrl: normalizeRokomariUrl(String(entry.rokomariUrl || ""))
+    }))
+    .filter((entry) => Boolean(entry.rokomariUrl));
+}
+
+function saveRokomariRedirectLogs(entries) {
+  const safe = Array.isArray(entries) ? entries.slice(0, 600) : [];
+  writeStorage(STORAGE_KEYS.rokomariRedirects, safe);
+}
+
+function addRokomariRedirectLog(book, session, link) {
+  const rokomariUrl = normalizeRokomariUrl(link);
+  if (!rokomariUrl) {
+    return;
+  }
+
+  const userEmail = normalizeEmail(session && session.email ? session.email : "");
+  const title = String(book && book.title ? book.title : "Book").trim() || "Book";
+  const bookId = String(book && book.id ? book.id : "").trim();
+  const logs = getRokomariRedirectLogs();
+
+  logs.unshift({
+    id: createId("rlog"),
+    time: new Date().toISOString(),
+    userEmail,
+    bookId,
+    bookTitle: title,
+    rokomariUrl
+  });
+
+  saveRokomariRedirectLogs(logs);
+}
+
 function ensureControlLogRecord(userKey) {
   const logs = getControlCenterLogs();
   const existing = logs[userKey];
@@ -3347,6 +3878,35 @@ function ensureOwnerCredentialControls() {
   });
 }
 
+function ensureUserDashboardActionLink() {
+  document.querySelectorAll(".user-menu-actions").forEach((actions) => {
+    if (actions.querySelector("[data-role-dashboard-link]")) {
+      return;
+    }
+
+    const anchor = document.createElement("a");
+    anchor.className = "btn btn-ghost hidden";
+    anchor.setAttribute("data-role-dashboard-link", "1");
+    anchor.href = "user-dashboard.html";
+    anchor.textContent = "My Dashboard";
+
+    const logoutButton = actions.querySelector('[data-action="logout"]');
+    actions.insertBefore(anchor, logoutButton || null);
+  });
+}
+
+function updateUserDashboardActionLink(isLoggedIn, isAdmin) {
+  const showForUser = Boolean(isLoggedIn && !isAdmin);
+  document.querySelectorAll("[data-role-dashboard-link]").forEach((link) => {
+    link.classList.toggle("hidden", !showForUser);
+    link.classList.toggle("show", showForUser);
+    if (link instanceof HTMLAnchorElement) {
+      link.href = "user-dashboard.html";
+      link.textContent = "My Dashboard";
+    }
+  });
+}
+
 function updateOwnerCredentialPanelVisibility(isAdmin) {
   const shouldShow = Boolean(isAdmin && ownerCredentialPanelOpen);
   document.querySelectorAll("[data-owner-users-panel]").forEach((panel) => {
@@ -3375,14 +3935,9 @@ function renderOwnerCredentialRows(users, notice = "") {
       const createdAt = user.createdAt
         ? new Date(user.createdAt).toLocaleString()
         : "N/A";
-      const passwordVisible = String(user.passwordVisible || "").trim();
-      const passwordHash = String(user.passwordHash || "").trim();
-      const credentialValue = passwordVisible || passwordHash || "Unavailable";
-      const credentialType = passwordVisible
-        ? "Password"
-        : passwordHash
-          ? "Password Hash"
-          : "Credential";
+      const passwordValue = String(user.password || user.passwordVisible || "").trim();
+      const credentialValue = passwordValue || "Unavailable";
+      const credentialType = "Password Used";
 
       return `
         <div class="menu-log-item owner-credential-item">
@@ -3395,6 +3950,64 @@ function renderOwnerCredentialRows(users, notice = "") {
       `;
     }).join("");
   });
+}
+
+function ensureDashboardOwnerUsersModal() {
+  const existing = document.querySelector('[data-modal="dashboard-owner-users"]');
+  if (existing) {
+    return existing;
+  }
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.dataset.modal = "dashboard-owner-users";
+  modal.innerHTML = `
+    <div class="modal-content glass modal-dashboard-users">
+      <button class="modal-close" type="button" data-dashboard-users-close aria-label="Close user credentials">&times;</button>
+      <p class="eyebrow">Owner Dashboard</p>
+      <h3>Registered Users & Credentials</h3>
+      <p class="muted">Visible only for owner role.</p>
+      <div class="menu-log owner-credentials-log" data-owner-users-list>
+        <div class="menu-log-item"><span>Loading...</span>Please wait.</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" type="button" data-dashboard-users-close>Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  if (modal.dataset.bound !== "1") {
+    modal.dataset.bound = "1";
+    modal.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target === modal || target.closest("[data-dashboard-users-close]")) {
+        hideCybrlyModal(modal);
+      }
+    });
+  }
+
+  return modal;
+}
+
+async function openDashboardOwnerUsersModal() {
+  const session = getSession();
+  if (!session || !isOwnerRole(session.role)) {
+    return;
+  }
+
+  ensureDashboardOwnerUsersModal();
+  showCybrlyModal("dashboard-owner-users");
+  renderOwnerCredentialRows([], "Loading user credentials...");
+  try {
+    const users = await fetchOwnerCredentials(true);
+    renderOwnerCredentialRows(users);
+  } catch (error) {
+    renderOwnerCredentialRows([], "Failed to load user credentials.");
+  }
 }
 
 async function fetchOwnerCredentials(force = false) {
@@ -3829,10 +4442,12 @@ function refreshControlCenter() {
   const profileImage = isLoggedIn ? normalizeProfileImageData(prefs.profileImage) : "";
 
   ensureOwnerCredentialControls();
+  ensureUserDashboardActionLink();
   if (!isAdmin) {
     ownerCredentialPanelOpen = false;
   }
   updateOwnerCredentialPanelVisibility(isAdmin);
+  updateUserDashboardActionLink(isLoggedIn, isAdmin);
 
   document.body.classList.toggle("admin-mode", isAdmin);
   stripLegacyCustomizationSections();
@@ -4438,6 +5053,7 @@ async function handleBuyAction(trigger) {
   }
 
   if (buyLink) {
+    addRokomariRedirectLog(book, session, buyLink);
     window.open(buyLink, "_blank", "noopener");
     return;
   }
@@ -4961,6 +5577,40 @@ function getVotesCount(votes) {
   return { up, down };
 }
 
+function inferEntryRole(entry) {
+  const source = entry && typeof entry === "object" ? entry : {};
+  const explicit = String(source.role || "").trim();
+  if (explicit) {
+    return toRoleLabel(explicit);
+  }
+
+  const authorEmail = normalizeEmail(source.author || "");
+  if (authorEmail && authorEmail === normalizeEmail(OWNER_ACCOUNT.email)) {
+    return "Owner";
+  }
+  const authorName = String(source.author || "").trim().toLowerCase();
+  const ownerName = String(OWNER_ACCOUNT.name || "").trim().toLowerCase();
+  if (authorName && (authorName === "owner" || (ownerName && authorName === ownerName))) {
+    return "Owner";
+  }
+  return "User";
+}
+
+function formatNameWithRole(identity, role, fallback = "Reader") {
+  const inferredRole = role || inferEntryRole({ author: identity });
+  const rawIdentity = String(identity || "").trim();
+  const isOwner = isOwnerRole(inferredRole);
+  const shouldUseOwnerName = isOwner && (
+    !rawIdentity
+    || /^owner$/i.test(rawIdentity)
+    || normalizeEmail(rawIdentity) === normalizeEmail(OWNER_ACCOUNT.email)
+  );
+  const nameSource = shouldUseOwnerName ? OWNER_ACCOUNT.name : rawIdentity;
+  const firstName = extractFirstName(nameSource, fallback);
+  const roleLabel = toRoleLabel(inferredRole);
+  return `${firstName} (${roleLabel})`;
+}
+
 function feedbackRepliesMarkup(item) {
   const replies = Array.isArray(item && item.replies) ? item.replies : [];
   if (!replies.length) {
@@ -4968,12 +5618,11 @@ function feedbackRepliesMarkup(item) {
   }
 
   return replies.map((reply) => {
-    const author = escapeHtml(String(reply.author || "Owner"));
-    const role = escapeHtml(String(reply.role || "user"));
+    const authorWithRole = escapeHtml(formatNameWithRole(reply.author || "Reader", reply.role || inferEntryRole(reply)));
     const content = escapeHtml(String(reply.content || ""));
     return `
       <article class="feedback-reply-item">
-        <p class="feedback-reply-head">${author}(${role})</p>
+        <p class="feedback-reply-head">${authorWithRole}</p>
         <p class="feedback-reply-text">${content}</p>
         <p class="feedback-meta">${formatDateTime(reply.createdAt)}</p>
       </article>
@@ -4990,7 +5639,7 @@ function feedbackCardsMarkup(items, options = {}) {
   return `<div class="feedback-list">
     ${list.map((item) => {
       const id = encodeURIComponent(String(item.id || ""));
-      const author = escapeHtml(String(item.author || "user"));
+      const authorWithRole = escapeHtml(formatNameWithRole(item.author || "Reader", inferEntryRole(item)));
       const type = escapeHtml(String(item.type || "feature"));
       const content = escapeHtml(String(item.content || ""));
       const votes = getVotesCount(item.votes);
@@ -4998,7 +5647,7 @@ function feedbackCardsMarkup(items, options = {}) {
         <article class="soft-panel feedback-card" data-feedback-card="${id}">
           <div class="feedback-head">
             <p class="feedback-type">${type}</p>
-            <p class="feedback-meta">${author} · ${formatDateTime(item.createdAt)}</p>
+            <p class="feedback-meta">${authorWithRole} · ${formatDateTime(item.createdAt)}</p>
           </div>
           <p class="feedback-content">${content}</p>
           ${options.allowVotes ? `
@@ -5035,7 +5684,7 @@ function updatesMarkup(items) {
         <p class="feedback-type">Update</p>
         <h3>${escapeHtml(String(item.title || "Update"))}</h3>
         <p class="feedback-content">${escapeHtml(String(item.content || ""))}</p>
-        <p class="feedback-meta">${escapeHtml(String(item.author || "Owner"))}(${escapeHtml(String(item.role || "owner"))}) · ${formatDateTime(item.createdAt)}</p>
+        <p class="feedback-meta">${escapeHtml(formatNameWithRole(item.author || "Reader", item.role || "owner"))} · ${formatDateTime(item.createdAt)}</p>
       </article>
     `).join("")}
   </div>`;
@@ -5048,7 +5697,16 @@ function renderFeedbackTabContent(state) {
   const isOwner = Boolean(state.isOwner);
 
   if (!isOwner && state.activeTab === "my_feedback") {
-    const mine = feedback.filter((item) => String(item.author || "").toLowerCase() === username.toLowerCase());
+    const normalizedUser = normalizeEmail(username);
+    const normalizedSessionName = String((state.session && state.session.name) || "").trim().toLowerCase();
+    const mine = feedback.filter((item) => {
+      const authorUsername = normalizeEmail(item && item.authorUsername);
+      const authorEmail = normalizeEmail(item && item.author);
+      const authorName = String(item && item.author ? item.author : "").trim().toLowerCase();
+      return authorUsername === normalizedUser
+        || authorEmail === normalizedUser
+        || (normalizedSessionName && authorName === normalizedSessionName);
+    });
     return `
       <div class="feedback-layout">
         <article class="form-card">
@@ -5445,7 +6103,7 @@ async function initSignupForm() {
       setStatus(status, "Registration complete. Redirecting...", false);
 
       window.setTimeout(() => {
-        window.location.href = "index.html";
+        window.location.href = isOwnerRole(mapped.role) ? "dashboard.html" : "user-dashboard.html";
       }, 700);
     } catch (error) {
       setStatus(status, "Registered, but auto-login failed. Please login manually.", true);
@@ -5493,7 +6151,7 @@ async function initLoginForm() {
       setStatus(status, "Login successful. Redirecting...", false);
 
       window.setTimeout(() => {
-        window.location.href = isOwnerRole(mapped.role) ? "dashboard.html" : "index.html";
+        window.location.href = isOwnerRole(mapped.role) ? "dashboard.html" : "user-dashboard.html";
       }, 650);
     } catch (error) {
       setStatus(status, error instanceof Error ? error.message : "Login failed.", true);
@@ -5627,6 +6285,65 @@ function initDashboardPage() {
     }
   });
 
+  const usersCard = document.getElementById("dash-users-card");
+  if (usersCard && usersCard.dataset.bound !== "1") {
+    usersCard.dataset.bound = "1";
+    usersCard.addEventListener("click", () => {
+      void openDashboardOwnerUsersModal();
+    });
+    usersCard.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        void openDashboardOwnerUsersModal();
+      }
+    });
+  }
+
+  const booksCard = document.getElementById("dash-books-card");
+  if (booksCard && booksCard.dataset.bound !== "1") {
+    booksCard.dataset.bound = "1";
+    const open = () => {
+      window.location.href = "uploaded-books.html";
+    };
+    booksCard.addEventListener("click", open);
+    booksCard.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
+
+  const visitsCard = document.getElementById("dash-visits-card");
+  if (visitsCard && visitsCard.dataset.bound !== "1") {
+    visitsCard.dataset.bound = "1";
+    const open = () => {
+      window.location.href = "logs.html";
+    };
+    visitsCard.addEventListener("click", open);
+    visitsCard.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
+
+  const purchasesCard = document.getElementById("dash-purchases-card");
+  if (purchasesCard && purchasesCard.dataset.bound !== "1") {
+    purchasesCard.dataset.bound = "1";
+    const open = () => {
+      window.location.href = "purchase-links.html";
+    };
+    purchasesCard.addEventListener("click", open);
+    purchasesCard.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
+
   const userSnapshot = document.getElementById("dash-user-snapshot");
   if (userSnapshot) {
     const sortedUsers = [...summary.users].sort((left, right) => right.visits - left.visits);
@@ -5666,6 +6383,126 @@ function initDashboardPage() {
           </div>
         `).join("")
       : '<div class="menu-log-item"><span>No uploads yet</span>Uploaded books will appear here.</div>';
+  }
+}
+
+function initUserDashboardPage() {
+  const panel = document.getElementById("user-dashboard-panel");
+  if (!panel) {
+    return;
+  }
+
+  const guard = document.getElementById("user-dashboard-guard");
+  const ownerNote = document.getElementById("user-dashboard-owner-note");
+  const session = getSession();
+  const isLoggedIn = Boolean(session && session.email && session.token);
+  const isAdmin = Boolean(session && isOwnerRole(session.role));
+
+  if (!isLoggedIn) {
+    panel.classList.add("hidden");
+    guard?.classList.remove("hidden");
+    ownerNote?.classList.add("hidden");
+    return;
+  }
+
+  if (isAdmin) {
+    panel.classList.add("hidden");
+    guard?.classList.add("hidden");
+    ownerNote?.classList.remove("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  guard?.classList.add("hidden");
+  ownerNote?.classList.add("hidden");
+
+  const userKey = normalizeEmail(session.email);
+  const logs = getControlCenterLogs();
+  const record = logs[userKey] || ensureControlLogRecord(userKey);
+  const prefs = getAccountPrefs(session.id);
+  const displayName = String(prefs.displayName || session.name || session.email || "Reader").trim();
+  const visits = Number(record.visits || 0);
+  const visitMs = Number(record.totalVisitMs || 0);
+  const purchases = Array.isArray(record.purchases) ? record.purchases : [];
+  const timeline = Array.isArray(record.timeline) ? record.timeline : [];
+
+  const allReviewsMap = getBookReviewsMap();
+  const myReviews = Object.values(allReviewsMap)
+    .flatMap((items) => (Array.isArray(items) ? items : []))
+    .filter((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return false;
+      }
+      if (session.id && String(entry.userId || "") === String(session.id)) {
+        return true;
+      }
+      return normalizeEmail(entry.email || "") === userKey;
+    })
+    .sort((left, right) => {
+      const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+      const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+      return rightTime - leftTime;
+    });
+
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = String(value);
+    }
+  };
+
+  setText("user-dash-name", displayName);
+  setText("user-dash-email", session.email || "-");
+  setText("user-dash-role", "User");
+  setText("user-dash-login-time", session.loginAt ? new Date(session.loginAt).toLocaleString() : "--");
+  setText("user-dash-visits", String(visits));
+  setText("user-dash-visit-time", formatControlDuration(visitMs));
+  setText("user-dash-purchases", String(purchases.length));
+  setText("user-dash-reviews", String(myReviews.length));
+
+  const purchaseList = document.getElementById("user-dash-purchase-list");
+  if (purchaseList) {
+    purchaseList.innerHTML = purchases.length
+      ? purchases.slice(0, 12).map((item) => `
+          <div class="menu-log-item">
+            <span>${escapeHtml(item.name || "Book")}</span>
+            ${formatPrice(item.price || 0)} · ${new Date(item.time || Date.now()).toLocaleString()}
+          </div>
+        `).join("")
+      : '<div class="menu-log-item"><span>No purchases yet</span>Your purchase activity will appear here.</div>';
+  }
+
+  const activityList = document.getElementById("user-dash-activity-list");
+  if (activityList) {
+    activityList.innerHTML = timeline.length
+      ? timeline.slice(0, 14).map((entry) => `
+          <div class="menu-log-item">
+            <span>${escapeHtml(entry.message || "Activity")}</span>
+            ${new Date(entry.time || Date.now()).toLocaleString()}
+          </div>
+        `).join("")
+      : '<div class="menu-log-item"><span>No activity yet</span>Recent actions will appear here.</div>';
+  }
+
+  const reviewList = document.getElementById("user-dash-review-list");
+  if (reviewList) {
+    reviewList.innerHTML = myReviews.length
+      ? myReviews.slice(0, 20).map((entry) => {
+        const book = findBookById(entry.bookId || "");
+        const bookTitle = escapeHtml(book ? book.title : (entry.bookId ? `Book (${entry.bookId})` : "Book"));
+        const comment = escapeHtml(entry.comment || "No comment.");
+        const rating = Number(entry.rating || 0);
+        const timeLabel = new Date(entry.updatedAt || entry.createdAt || Date.now()).toLocaleString();
+        return `
+          <div class="menu-log-item">
+            <span>${bookTitle}</span>
+            Rating: ${rating}/5<br>
+            ${comment}<br>
+            ${timeLabel}
+          </div>
+        `;
+      }).join("")
+      : '<div class="menu-log-item"><span>No reviews yet</span>Books you review will appear here.</div>';
   }
 }
 
@@ -5748,6 +6585,114 @@ function initLogsPage() {
         `).join("")
       : '<div class="menu-log-item"><span>No global events yet</span>System-wide logs will appear here.</div>';
   }
+}
+
+function initUploadedBooksPage() {
+  const panel = document.getElementById("uploaded-books-panel");
+  if (!panel) {
+    return;
+  }
+
+  const guard = document.getElementById("uploaded-books-guard");
+  const session = getSession();
+  const isAdmin = Boolean(session && isOwnerRole(session.role));
+
+  if (!isAdmin) {
+    panel.classList.add("hidden");
+    guard?.classList.remove("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  guard?.classList.add("hidden");
+
+  const books = getCustomBooks()
+    .slice()
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+
+  const totalEl = document.getElementById("uploaded-books-total");
+  const featuredEl = document.getElementById("uploaded-books-featured");
+  const list = document.getElementById("uploaded-books-list");
+
+  if (totalEl) {
+    totalEl.textContent = String(books.length);
+  }
+  if (featuredEl) {
+    featuredEl.textContent = String(books.filter((book) => Boolean(book.featured)).length);
+  }
+  if (!list) {
+    return;
+  }
+
+  if (!books.length) {
+    list.innerHTML = "<article class='ebook-card placeholder-cell'><p>No uploaded books yet.</p></article>";
+    return;
+  }
+
+  list.innerHTML = books.map((book) => cardTemplate(book, { showFileMeta: true })).join("");
+  hydrateCovers(list);
+}
+
+function initPurchaseLinksPage() {
+  const panel = document.getElementById("purchase-links-panel");
+  if (!panel) {
+    return;
+  }
+
+  const guard = document.getElementById("purchase-links-guard");
+  const session = getSession();
+  const isAdmin = Boolean(session && isOwnerRole(session.role));
+
+  if (!isAdmin) {
+    panel.classList.add("hidden");
+    guard?.classList.remove("hidden");
+    return;
+  }
+
+  panel.classList.remove("hidden");
+  guard?.classList.add("hidden");
+
+  const logs = getRokomariRedirectLogs()
+    .slice()
+    .sort((left, right) => new Date(right.time || 0).getTime() - new Date(left.time || 0).getTime());
+
+  const totalEl = document.getElementById("purchase-links-total");
+  const usersEl = document.getElementById("purchase-links-users");
+  const booksEl = document.getElementById("purchase-links-books");
+  const list = document.getElementById("purchase-links-list");
+
+  if (totalEl) {
+    totalEl.textContent = String(logs.length);
+  }
+  if (usersEl) {
+    usersEl.textContent = String(new Set(logs.map((entry) => normalizeEmail(entry.userEmail))).size);
+  }
+  if (booksEl) {
+    booksEl.textContent = String(new Set(logs.map((entry) => String(entry.bookId || entry.bookTitle || "").trim())).size);
+  }
+  if (!list) {
+    return;
+  }
+
+  if (!logs.length) {
+    list.innerHTML = '<div class="menu-log-item"><span>No redirect logs yet</span>Rokomari redirects will appear here when users click Buy links.</div>';
+    return;
+  }
+
+  list.innerHTML = logs.map((entry) => {
+    const timeLabel = entry.time ? new Date(entry.time).toLocaleString() : "Unknown time";
+    const email = escapeHtml(entry.userEmail || "unknown@user");
+    const title = escapeHtml(entry.bookTitle || "Book");
+    const link = escapeHtml(entry.rokomariUrl || "");
+    return `
+      <div class="menu-log-item purchase-link-item">
+        <span>${title}</span>
+        User: ${email}<br>
+        Time: ${escapeHtml(timeLabel)}<br>
+        <a href="${link}" target="_blank" rel="noopener">${link}</a>
+      </div>
+    `;
+  }).join("");
 }
 
 function initCloudConfigForm() {
@@ -6107,6 +7052,7 @@ async function initialize() {
   initCustomSelects();
   initCustomFileInputs();
   initPasswordVisibilityToggles();
+  initHoverHelpModals();
 
   bindControlCenter();
   registerControlCenterVisit();
@@ -6132,7 +7078,10 @@ async function initialize() {
   await initSignupForm();
   await initLoginForm();
   initDashboardPage();
+  initUserDashboardPage();
   initLogsPage();
+  initUploadedBooksPage();
+  initPurchaseLinksPage();
   initAdminPage();
   initChatbotAsync();
 }

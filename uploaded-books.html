@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="darkreader-lock">
-  <title>Dashboard | e-Zone</title>
-  <meta name="description" content="Owner control dashboard for e-Zone.">
+  <title>Uploaded Books | e-Zone</title>
+  <meta name="description" content="Owner view of all uploaded books in e-Zone.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,7 +28,7 @@
   <div class="page-loader" data-page-loader>
     <div class="loader-shell">
       <div class="loader-ring"></div>
-      <p>Loading owner dashboard...</p>
+      <p>Loading uploaded books...</p>
     </div>
   </div>
 
@@ -127,70 +127,41 @@
 
   <main>
     <section class="section container">
-      <article id="dashboard-guard" class="soft-panel">
+      <article id="uploaded-books-guard" class="soft-panel">
         <h2>Owner Access Required</h2>
-        <p class="info-text">Only owner can open the full dashboard overview.</p>
+        <p class="info-text">Only owner can view all uploaded books.</p>
         <div class="actions" style="margin-top:0.65rem;">
           <a class="btn btn-primary" href="login.html">Go to Login</a>
         </div>
       </article>
 
-      <section id="dashboard-panel" class="hidden">
+      <section id="uploaded-books-panel" class="hidden">
         <div class="section-header">
           <div>
-            <span class="section-label">Owner Dashboard</span>
-            <h2>System Overview</h2>
-            <p>Central overview of users, visits, purchases, uploads, and recent activity.</p>
+            <span class="section-label">Uploaded Books</span>
+            <h2>All Uploaded Books</h2>
+            <p>Complete list of books uploaded by owner.</p>
           </div>
           <div class="actions">
-            <a class="btn btn-ghost" href="logs.html">Open Logs</a>
-            <a class="btn btn-primary" href="admin.html">Upload Books</a>
+            <a class="btn btn-ghost" href="dashboard.html">Dashboard</a>
+            <a class="btn btn-primary" href="admin.html">Open Upload Page</a>
           </div>
         </div>
 
         <div class="cards-grid">
-          <article class="soft-panel dashboard-action-card" id="dash-users-card" role="button" tabindex="0" aria-label="View registered users and credentials">
-            <h3>Total Users</h3>
-            <p class="book-price" id="dash-total-users">0</p>
-            <p class="info-text dash-card-hint">Click to view registered users &amp; credentials</p>
-          </article>
-          <article class="soft-panel dashboard-action-card" id="dash-books-card" role="button" tabindex="0" aria-label="Open uploaded books page">
-            <h3>Total Books</h3>
-            <p class="book-price" id="dash-total-books">0</p>
-            <p class="info-text dash-card-hint">Click to open all uploaded books</p>
-          </article>
-          <article class="soft-panel"><h3>Featured Books</h3><p class="book-price" id="dash-total-featured">0</p></article>
-          <article class="soft-panel dashboard-action-card" id="dash-visits-card" role="button" tabindex="0" aria-label="Open logs page">
-            <h3>Total Visits</h3>
-            <p class="book-price" id="dash-total-visits">0</p>
-            <p class="info-text dash-card-hint">Click to open logs page</p>
-          </article>
-          <article class="soft-panel dashboard-action-card" id="dash-purchases-card" role="button" tabindex="0" aria-label="Open purchase redirect logs">
-            <h3>Total Purchases</h3>
-            <p class="book-price" id="dash-total-purchases">0</p>
-            <p class="info-text dash-card-hint">Click to open Rokomari redirect logs</p>
-          </article>
-          <article class="soft-panel"><h3>Total Visit Time</h3><p class="book-price" id="dash-total-time">0m</p></article>
-          <article class="soft-panel"><h3>Total Uploads</h3><p class="book-price" id="dash-total-uploads">0</p></article>
+          <article class="soft-panel"><h3>Total Uploaded</h3><p class="book-price" id="uploaded-books-total">0</p></article>
+          <article class="soft-panel"><h3>Featured Uploaded</h3><p class="book-price" id="uploaded-books-featured">0</p></article>
         </div>
 
         <section class="section" style="padding-inline:0;">
-          <div class="cards-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
-            <article class="soft-panel">
-              <h3>User Snapshot</h3>
-              <div class="menu-log" id="dash-user-snapshot"></div>
-            </article>
-            <article class="soft-panel">
-              <h3>Recent Uploads</h3>
-              <div class="menu-log" id="dash-recent-uploads"></div>
-            </article>
+          <div class="section-header">
+            <div>
+              <h2>Uploaded Library</h2>
+              <p>Books are ordered by latest upload first.</p>
+            </div>
           </div>
+          <div id="uploaded-books-list" class="cards-grid"></div>
         </section>
-
-        <article class="soft-panel">
-          <h3>Global Activity Feed</h3>
-          <div class="menu-log" id="dash-global-activity"></div>
-        </article>
       </section>
     </section>
   </main>
