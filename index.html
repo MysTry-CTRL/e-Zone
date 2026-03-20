@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="darkreader-lock">
+  <title>e-Zone | Ebook Platform</title>
+  <meta name="description" content="e-Zone futuristic ebook platform for Bangla and English books.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap" rel="stylesheet">
+  <script data-theme-bootstrap>
+    (function() {
+      try {
+        var theme = localStorage.getItem("ezone_theme_v1");
+        if (theme === "dark" || theme === "light") {
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+      } catch (error) {
+        // Ignore theme bootstrap errors.
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="loading-active">
+  <div class="page-loader" data-page-loader>
+    <div class="loader-shell">
+      <div class="loader-ring"></div>
+      <p class="loader-status">Booting e-Zone interface<span class="loader-dots" aria-hidden="true"></span></p>
+    </div>
+  </div>
+
+  <div class="bg-grid"></div>
+  <div class="bg-blob blob-a"></div>
+  <div class="bg-blob blob-b"></div>
+  <div class="bg-blob blob-c"></div>
+
+  <header class="site-header glass">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html" aria-label="e-Zone home">
+        <span class="brand-icon" aria-hidden="true"></span>
+        <h1 class="site-title">e-Zone</h1>
+      </a>
+
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link active" href="index.html">Home</a>
+        <a class="nav-link" href="books.html">Books</a>
+        <a class="nav-link" href="about.html">About</a>
+        <a class="nav-link" href="contact.html">Contact</a>
+      </nav>
+
+      <div class="nav-actions control-center">
+  <button class="profile-trigger hidden" type="button" data-user-menu-trigger>
+    <span class="profile-avatar" data-profile-avatar>DP</span>
+    <span class="profile-meta">
+      <span class="profile-label">Logged in</span>
+      <span class="profile-email" data-profile-email>user@CYBRLY.io</span>
+    </span>
+  </button>
+  <a class="btn btn-ghost" href="login.html" data-auth-link="login">Login</a>
+  <a class="btn btn-primary" href="signup.html" data-auth-link="signup">Sign Up</a>
+</div>
+    </div>
+  </header>
+
+  <div class="user-menu-overlay" data-user-overlay></div>
+  <div class="user-menu glass" data-user-menu>
+    <div class="user-menu-header">
+      <p class="eyebrow user-menu-role" data-user-role-label>User Access</p>
+      <h3 class="user-menu-title" data-user-menu-title>User Dashboard</h3>
+      <p class="user-menu-sub" data-user-menu-sub>Track your personal activity logs and settings.</p>
+      <button class="menu-close" type="button" data-user-menu-close aria-label="Close control center" title="Close">&times;</button>
+    </div>
+    <div class="user-menu-info">
+  <span class="profile-avatar" data-user-avatar>DP</span>
+  <div>
+    <p class="profile-name" data-user-name>CYBRLY User</p>
+    <p class="profile-email" data-user-email>user@CYBRLY.io</p>
+    <p class="profile-bio" data-user-bio>Neon system builder.</p>
+    <div class="profile-meta-row">
+      <span class="role-badge" data-user-role-badge>User</span>
+      <span class="profile-time" data-user-meta>Member since --</span>
+    </div>
+  </div>
+</div>
+<div class="user-menu-actions">
+  <button class="btn btn-ghost" type="button" data-open-modal="profile-customize">Customize Profile</button>
+  <a class="btn btn-ghost" href="dashboard.html" data-admin-only>Dashboard</a>
+  <a class="btn btn-ghost" href="logs.html" data-admin-only>Logs</a>
+  <a class="btn btn-ghost" href="admin.html" data-admin-only>Upload Books</a>
+  <button class="btn btn-danger-action" type="button" data-action="logout">Logout</button>
+</div>
+    <div class="user-menu-section" data-user-dashboard>
+      <div class="menu-stat">
+        <span>Total Visit Time</span>
+        <strong data-user-visit-time>0m</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Number of Visits</span>
+        <strong data-user-visits>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Purchase History</span>
+        <strong data-user-purchases>0</strong>
+      </div>
+      <div class="menu-log" data-user-purchase-list></div>
+      <h4>Activity Timeline</h4>
+      <div class="menu-log" data-user-timeline></div>
+    </div>
+    <div class="user-menu-section" data-admin-dashboard>
+      <div class="menu-stat">
+        <span>Total User Visits</span>
+        <strong data-admin-visits>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Total Purchases</span>
+        <strong data-admin-purchases>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Total Uploads</span>
+        <strong data-admin-uploads>0</strong>
+      </div>
+      <h4>Global Activity Timeline</h4>
+      <div class="menu-log" data-admin-log-list></div>
+    </div>
+  </div>
+
+  <main>
+    <section class="section">
+      <div class="container hero-card">
+        <div>
+          <span class="section-label">Futuristic Ebook Platform</span>
+          <h2>Bangla &amp; English ebooks in one playful control system</h2>
+          <p class="info-text">Browse by category, check featured picks, and manage account actions from one universal control-center button.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="books.html">Explore Books</a>
+            <a class="btn btn-ghost" href="signup.html">Create Account</a>
+          </div>
+        </div>
+
+        <div class="hero-shapes" aria-hidden="true">
+          <span class="s1"></span>
+          <span class="s2"></span>
+          <span class="s3"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="section-header">
+        <div>
+          <span class="section-label">Featured by Category</span>
+          <h2>Home Featured Shelf</h2>
+          <p>Each category shows three featured books selected by featured status.</p>
+        </div>
+      </div>
+      <div id="home-category-sections"></div>
+    </section>
+
+    <section class="section container">
+      <div class="cards-grid">
+        <article class="soft-panel">
+          <h3>Authentication Rules</h3>
+          <p>Registration can create only normal users. Owner credentials are fixed and managed securely.</p>
+        </article>
+        <article class="soft-panel">
+          <h3>Owner Upload Control</h3>
+          <p>Owner uploads cover PDF, then adds a Rokomari link and/or QR code source, with category and featured control.</p>
+        </article>
+        <article class="soft-panel">
+          <h3>Category Routing</h3>
+          <p>Each category on the books page includes a Show All action to open the full category library.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <h3 class="footer-title">e-Zone</h3>
+        <p class="footer-text">Playful futuristic ebook platform for Bangla and English readers.</p>
+      </div>
+      <div>
+        <h4 class="footer-title">Quick Links</h4>
+        <div class="footer-links">
+          <a href="index.html">Home</a>
+          <a href="books.html">Books</a>
+          <a href="about.html">About</a>
+          <a href="contact.html">Contact</a>
+        </div>
+      </div>
+      <div>
+        <h4 class="footer-title">Social</h4>
+        <div class="footer-links">
+          <a href="https://youtube.com/@MysTryReyal" target="_blank" rel="noopener">YouTube</a>
+          <a href="https://www.instagram.com/am_i_bisashable_/" target="_blank" rel="noopener">Instagram</a>
+        </div>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 e-Zone. All Rights Reserved.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+

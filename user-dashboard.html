@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="darkreader-lock">
+  <title>My Dashboard | e-Zone</title>
+  <meta name="description" content="Personal user dashboard for e-Zone readers.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap" rel="stylesheet">
+  <script data-theme-bootstrap>
+    (function() {
+      try {
+        var theme = localStorage.getItem("ezone_theme_v1");
+        if (theme === "dark" || theme === "light") {
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+      } catch (error) {
+        // Ignore theme bootstrap errors.
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="loading-active">
+  <div class="page-loader" data-page-loader>
+    <div class="loader-shell">
+      <div class="loader-ring"></div>
+      <p>Loading your dashboard...</p>
+    </div>
+  </div>
+
+  <div class="bg-grid"></div>
+  <div class="bg-blob blob-a"></div>
+  <div class="bg-blob blob-b"></div>
+  <div class="bg-blob blob-c"></div>
+
+  <header class="site-header glass">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html" aria-label="e-Zone home">
+        <span class="brand-icon" aria-hidden="true"></span>
+        <h1 class="site-title">e-Zone</h1>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link" href="books.html">Books</a>
+        <a class="nav-link" href="about.html">About</a>
+        <a class="nav-link" href="contact.html">Contact</a>
+      </nav>
+      <div class="nav-actions control-center">
+        <button class="profile-trigger hidden" type="button" data-user-menu-trigger>
+          <span class="profile-avatar" data-profile-avatar>DP</span>
+          <span class="profile-meta">
+            <span class="profile-label">Logged in</span>
+            <span class="profile-email" data-profile-email>user@CYBRLY.io</span>
+          </span>
+        </button>
+        <a class="btn btn-ghost" href="login.html" data-auth-link="login">Login</a>
+        <a class="btn btn-primary" href="signup.html" data-auth-link="signup">Sign Up</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="user-menu-overlay" data-user-overlay></div>
+  <div class="user-menu glass" data-user-menu>
+    <div class="user-menu-header">
+      <p class="eyebrow user-menu-role" data-user-role-label>User Access</p>
+      <h3 class="user-menu-title" data-user-menu-title>User Dashboard</h3>
+      <p class="user-menu-sub" data-user-menu-sub>Track your personal activity logs and settings.</p>
+      <button class="menu-close" type="button" data-user-menu-close aria-label="Close control center" title="Close">&times;</button>
+    </div>
+    <div class="user-menu-info">
+      <span class="profile-avatar" data-user-avatar>DP</span>
+      <div>
+        <p class="profile-name" data-user-name>CYBRLY User</p>
+        <p class="profile-email" data-user-email>user@CYBRLY.io</p>
+        <p class="profile-bio" data-user-bio>Neon system builder.</p>
+        <div class="profile-meta-row">
+          <span class="role-badge" data-user-role-badge>User</span>
+          <span class="profile-time" data-user-meta>Member since --</span>
+        </div>
+      </div>
+    </div>
+    <div class="user-menu-actions">
+      <button class="btn btn-ghost" type="button" data-open-modal="profile-customize">Customize Profile</button>
+      <a class="btn btn-ghost" href="dashboard.html" data-admin-only>Dashboard</a>
+      <a class="btn btn-ghost" href="logs.html" data-admin-only>Logs</a>
+      <a class="btn btn-ghost" href="admin.html" data-admin-only>Upload Books</a>
+      <button class="btn btn-danger-action" type="button" data-action="logout">Logout</button>
+    </div>
+    <div class="user-menu-section" data-user-dashboard>
+      <div class="menu-stat">
+        <span>Total Visit Time</span>
+        <strong data-user-visit-time>0m</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Number of Visits</span>
+        <strong data-user-visits>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Purchase History</span>
+        <strong data-user-purchases>0</strong>
+      </div>
+      <div class="menu-log" data-user-purchase-list></div>
+      <h4>Activity Timeline</h4>
+      <div class="menu-log" data-user-timeline></div>
+    </div>
+    <div class="user-menu-section" data-admin-dashboard>
+      <div class="menu-stat">
+        <span>Total User Visits</span>
+        <strong data-admin-visits>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Total Purchases</span>
+        <strong data-admin-purchases>0</strong>
+      </div>
+      <div class="menu-stat">
+        <span>Total Uploads</span>
+        <strong data-admin-uploads>0</strong>
+      </div>
+      <h4>Global Activity Timeline</h4>
+      <div class="menu-log" data-admin-log-list></div>
+    </div>
+  </div>
+
+  <main>
+    <section class="section container">
+      <article id="user-dashboard-guard" class="soft-panel">
+        <h2>Login Required</h2>
+        <p class="info-text">Please login as a user to view your personal dashboard.</p>
+        <div class="actions" style="margin-top:0.65rem;">
+          <a class="btn btn-primary" href="login.html">Go to Login</a>
+        </div>
+      </article>
+
+      <article id="user-dashboard-owner-note" class="soft-panel hidden">
+        <h2>Owner Account Detected</h2>
+        <p class="info-text">Owner dashboards are available in the owner panel.</p>
+        <div class="actions" style="margin-top:0.65rem;">
+          <a class="btn btn-primary" href="dashboard.html">Open Owner Dashboard</a>
+        </div>
+      </article>
+
+      <section id="user-dashboard-panel" class="hidden">
+        <div class="section-header">
+          <div>
+            <span class="section-label">My Dashboard</span>
+            <h2>Personal Overview</h2>
+            <p>All your activity, purchases, and reviews in one place.</p>
+          </div>
+          <div class="actions">
+            <a class="btn btn-ghost" href="books.html">Browse Books</a>
+            <a class="btn btn-primary" href="feedback.html">Open Feedback</a>
+          </div>
+        </div>
+
+        <article class="soft-panel">
+          <div class="cards-grid">
+            <div>
+              <p class="section-label">Profile</p>
+              <h3 id="user-dash-name">Reader</h3>
+              <p class="info-text">Email: <span id="user-dash-email">-</span></p>
+              <p class="info-text">Role: <span id="user-dash-role">User</span></p>
+              <p class="info-text">Last Login: <span id="user-dash-login-time">-</span></p>
+            </div>
+          </div>
+        </article>
+
+        <div class="cards-grid">
+          <article class="soft-panel">
+            <h3>Total Visits</h3>
+            <p class="book-price" id="user-dash-visits">0</p>
+          </article>
+          <article class="soft-panel">
+            <h3>Total Visit Time</h3>
+            <p class="book-price" id="user-dash-visit-time">0m</p>
+          </article>
+          <article class="soft-panel">
+            <h3>Purchases</h3>
+            <p class="book-price" id="user-dash-purchases">0</p>
+          </article>
+          <article class="soft-panel">
+            <h3>Reviews</h3>
+            <p class="book-price" id="user-dash-reviews">0</p>
+          </article>
+        </div>
+
+        <section class="section" style="padding-inline:0;">
+          <div class="cards-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+            <article class="soft-panel">
+              <h3>Recent Purchases</h3>
+              <div class="menu-log" id="user-dash-purchase-list"></div>
+            </article>
+            <article class="soft-panel">
+              <h3>Recent Activity</h3>
+              <div class="menu-log" id="user-dash-activity-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <article class="soft-panel">
+          <h3>My Reviews</h3>
+          <div class="menu-log" id="user-dash-review-list"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <h3 class="footer-title">e-Zone</h3>
+        <p class="footer-text">Playful futuristic ebook platform for Bangla and English readers.</p>
+      </div>
+      <div>
+        <h4 class="footer-title">Quick Links</h4>
+        <div class="footer-links">
+          <a href="index.html">Home</a>
+          <a href="books.html">Books</a>
+          <a href="about.html">About</a>
+          <a href="contact.html">Contact</a>
+        </div>
+      </div>
+      <div>
+        <h4 class="footer-title">Social</h4>
+        <div class="footer-links">
+          <a href="https://youtube.com/@MysTryReyal" target="_blank" rel="noopener">YouTube</a>
+          <a href="https://www.instagram.com/am_i_bisashable_/" target="_blank" rel="noopener">Instagram</a>
+        </div>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 e-Zone. All Rights Reserved.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

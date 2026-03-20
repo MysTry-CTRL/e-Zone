@@ -1,0 +1,7 @@
+{
+  "name": "e-zone-firebase-app",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "e-Zone static site powered by Firebase Authentication and Firestore."
+}
