@@ -15,6 +15,9 @@ This project was originally built around local JSON storage, which does not work
 - Feedback form that writes directly to Firestore
 - Owner-only access for management pages such as dashboard, logs, uploads, and purchase links
 - User dashboard for normal authenticated users
+- Restored custom modal system for profile customization, popups, and owner dashboard actions
+- Mobile-safe fallback behavior that disables blocking custom pop-up modals on mobile browsers
+- Local profile preferences such as theme, avatar preview, privacy toggles, and reduced motion
 - Vercel-friendly architecture with persistent cloud data storage
 
 ## Tech Stack
@@ -85,6 +88,16 @@ The site currently uses these main collections:
 - Books and feedback are fetched dynamically from Firestore
 - Authenticated users can submit feedback
 - The reserved owner account gets access to admin-only pages and controls
+- The restored custom modal system is injected and managed from the shared frontend script
+- On mobile browsers, blocking custom modal popups are replaced with inline notices or normal page navigation
+- Profile customization preferences are stored locally in the browser so they persist across reloads
+
+## Authentication Notes
+
+- Normal users register through `signup.html`
+- The reserved owner account signs in directly through `login.html`
+- Owner registration is blocked from the public signup form
+- If Firestore profile syncing fails after authentication, the session can still continue with a local fallback profile
 
 ## Firebase Setup
 
@@ -138,6 +151,11 @@ You can run it with any static file server, for example:
 4. Make sure your Firebase project is configured and your Firestore/Auth rules are ready.
 
 No custom Node server is required.
+
+## Documentation
+
+- `README.md` should be updated whenever major features, authentication flows, UI systems, or deployment behavior change
+- This repository now documents the Firebase migration, owner-only access flow, and restored custom modal system
 
 ## Important Security Note
 

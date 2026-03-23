@@ -2242,6 +2242,36 @@ h6,
   overflow-wrap: anywhere;
 }
 
+.mobile-inline-notice {
+  width: min(100% - 1.2rem, var(--max-width));
+  margin: 0.7rem auto 0;
+  padding: 0.9rem 1rem;
+  position: relative;
+  z-index: 210;
+  display: grid;
+  gap: 0.35rem;
+  border-radius: 16px;
+}
+
+.mobile-inline-notice.show {
+  display: grid !important;
+}
+
+.mobile-inline-notice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.mobile-inline-notice-head .section-label {
+  margin: 0;
+}
+
+.mobile-inline-notice-message {
+  margin: 0;
+}
+
 @keyframes hoverHelpBarPulse {
   0% {
     opacity: 0.58;

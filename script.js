@@ -27,9 +27,14 @@ const CATEGORY_ORDER = [
 
 const OWNER_ACCOUNT = {
   email: "abirxxdbrine2024@gmail.com",
-  password: "6967#6769",
+  password: "#youtuber#69#",
   fullName: "Abir Biswas",
   role: "admin"
+};
+
+const STORAGE_KEYS = {
+  profilePreferences: "ezone_profile_prefs_v1",
+  theme: "ezone_theme_v1"
 };
 
 const state = {
@@ -44,8 +49,13 @@ const state = {
   usersError: "",
   feedback: [],
   feedbackLoaded: false,
-  feedbackError: ""
+  feedbackError: "",
+  uiPreferences: null,
+  dashboardUserFilter: "all"
 };
+
+let mobileNoticeTimer = 0;
+let hoverHelpTimer = 0;
 
 function isOwnerEmail(email) {
   return normalizeEmail(email) === normalizeEmail(OWNER_ACCOUNT.email);
@@ -67,11 +77,944 @@ function getPostLoginDestination(user = state.currentUser) {
   return isOwnerUser(user) ? "dashboard.html" : "user-dashboard.html";
 }
 
+function shouldDisableModalUi() {
+  const smallViewport = window.matchMedia("(max-width: 760px)").matches;
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const mobileAgent = /android|iphone|ipad|ipod|mobile/i.test(String(window.navigator.userAgent || ""));
+  return smallViewport || (mobileAgent && coarsePointer);
+}
+
+function getDefaultUiPreferences() {
+  return {
+    theme: "",
+    customBio: "",
+    avatarImage: "",
+    hideEmail: false,
+    hideActivity: false,
+    hidePurchases: false,
+    profilePrivate: false,
+    reduceMotion: false
+  };
+}
+
+function normalizeUiPreferences(value = {}) {
+  const next = value && typeof value === "object" ? value : {};
+
+  return {
+    theme: ["", "light", "dark"].includes(String(next.theme || "")) ? String(next.theme || "") : "",
+    customBio: String(next.customBio || "").trim().slice(0, 220),
+    avatarImage: String(next.avatarImage || ""),
+    hideEmail: Boolean(next.hideEmail),
+    hideActivity: Boolean(next.hideActivity),
+    hidePurchases: Boolean(next.hidePurchases),
+    profilePrivate: Boolean(next.profilePrivate),
+    reduceMotion: Boolean(next.reduceMotion)
+  };
+}
+
+function readUiPreferences() {
+  const defaults = getDefaultUiPreferences();
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.profilePreferences);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const theme = window.localStorage.getItem(STORAGE_KEYS.theme);
+    return normalizeUiPreferences({
+      ...defaults,
+      ...parsed,
+      theme: theme === "light" || theme === "dark" ? theme : ""
+    });
+  } catch (error) {
+    console.warn("[e-Zone] Could not load local profile preferences", error);
+    return defaults;
+  }
+}
+
+function loadUiPreferences() {
+  state.uiPreferences = readUiPreferences();
+  applyUiPreferences();
+}
+
+function persistUiPreferences() {
+  const next = normalizeUiPreferences(state.uiPreferences);
+  state.uiPreferences = next;
+
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEYS.profilePreferences,
+      JSON.stringify({
+        customBio: next.customBio,
+        avatarImage: next.avatarImage,
+        hideEmail: next.hideEmail,
+        hideActivity: next.hideActivity,
+        hidePurchases: next.hidePurchases,
+        profilePrivate: next.profilePrivate,
+        reduceMotion: next.reduceMotion
+      })
+    );
+
+    if (next.theme) {
+      window.localStorage.setItem(STORAGE_KEYS.theme, next.theme);
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.theme);
+    }
+  } catch (error) {
+    console.warn("[e-Zone] Could not save local profile preferences", error);
+  }
+
+  applyUiPreferences();
+}
+
+function applyUiPreferences() {
+  const prefs = normalizeUiPreferences(state.uiPreferences);
+  state.uiPreferences = prefs;
+
+  if (prefs.theme === "light" || prefs.theme === "dark") {
+    document.documentElement.setAttribute("data-theme", prefs.theme);
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+
+  document.body.classList.toggle("hide-email", prefs.hideEmail);
+  document.body.classList.toggle("hide-activity", prefs.hideActivity);
+  document.body.classList.toggle("hide-purchases", prefs.hidePurchases);
+  document.body.classList.toggle("profile-private", prefs.profilePrivate);
+  document.body.classList.toggle("reduce-motion", prefs.reduceMotion);
+
+  applyAvatarPreferenceToTargets();
+}
+
+function getResolvedUserBio(defaultBio = "") {
+  const customBio = String(state.uiPreferences?.customBio || "").trim();
+  return customBio || defaultBio;
+}
+
+function applyAvatarPreferenceToTargets() {
+  const image = String(state.uiPreferences?.avatarImage || "");
+
+  document.querySelectorAll("[data-profile-avatar], [data-user-avatar]").forEach((element) => {
+    const fallbackText = String(element.textContent || "").trim();
+    applyAvatarPreferenceToElement(element, image, fallbackText);
+  });
+
+  const preview = document.querySelector("[data-customize-avatar-preview]");
+  if (preview instanceof HTMLElement) {
+    const fallbackText = avatarLetters(getCurrentUserName() || state.currentUser?.email || "EZ");
+    applyAvatarPreferenceToElement(preview, getCustomizeAvatarDraft(), fallbackText);
+  }
+}
+
+function applyAvatarPreferenceToElement(element, image, fallbackText = "") {
+  if (!(element instanceof HTMLElement)) {
+    return;
+  }
+
+  if (image) {
+    const encoded = image.replaceAll("\"", "%22");
+    element.classList.add("has-image");
+    element.style.backgroundImage = `url("${encoded}")`;
+    element.textContent = "";
+    return;
+  }
+
+  element.classList.remove("has-image");
+  element.style.backgroundImage = "";
+  if (fallbackText) {
+    element.textContent = fallbackText;
+  }
+}
+
+function buildGlobalModalMarkup() {
+  return `
+    <div class="modal" data-modal-root="profile-customize" aria-hidden="true">
+      <div class="modal-content modal-customize glass" role="dialog" aria-modal="true" aria-labelledby="profile-customize-title">
+        <button class="modal-close" type="button" data-modal-close="profile-customize" aria-label="Close customize profile modal">&times;</button>
+        <p class="section-label">Control Center</p>
+        <h3 id="profile-customize-title">Customize Profile</h3>
+        <p class="info-text">Restore the custom control-center modal and keep your preferences saved in this browser.</p>
+        <div class="customize-grid">
+          <section class="customize-section">
+            <h4>Profile Preview</h4>
+            <div class="avatar-upload-row">
+              <span class="profile-avatar customize-avatar-preview" data-customize-avatar-preview>EZ</span>
+              <div class="avatar-upload-actions">
+                <label class="btn btn-ghost avatar-upload-btn">
+                  Upload Avatar
+                  <input class="native-file-hidden" type="file" accept="image/*" data-customize-avatar-input>
+                </label>
+                <button class="btn btn-ghost" type="button" data-customize-avatar-clear>Remove</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="customize-bio">Custom Bio</label>
+              <textarea class="textarea" id="customize-bio" rows="4" maxlength="220" data-customize-bio placeholder="Add a short note for your control center..."></textarea>
+            </div>
+            <p class="control-center-note">These settings are local to this browser and do not overwrite Firebase account data.</p>
+          </section>
+          <section class="customize-section">
+            <h4>Appearance</h4>
+            <div class="field">
+              <label for="customize-theme">Theme</label>
+              <select class="select" id="customize-theme" data-customize-theme>
+                <option value="">System Default</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
+            <label class="toggle-field">
+              <input type="checkbox" data-customize-reduce-motion>
+              Reduce motion across the interface
+            </label>
+          </section>
+          <section class="customize-section">
+            <h4>Privacy</h4>
+            <label class="toggle-field">
+              <input type="checkbox" data-customize-hide-email>
+              Hide your email in the control center
+            </label>
+            <label class="toggle-field">
+              <input type="checkbox" data-customize-hide-activity>
+              Hide activity timeline blocks
+            </label>
+            <label class="toggle-field">
+              <input type="checkbox" data-customize-hide-purchases>
+              Hide purchase history areas
+            </label>
+            <label class="toggle-field">
+              <input type="checkbox" data-customize-profile-private>
+              Hide member metadata
+            </label>
+          </section>
+          <section class="customize-section">
+            <h4>Quick Notes</h4>
+            <div class="menu-log-item">
+              <span>Restored Modal Flow</span>
+              Your custom modal styling is back and now runs from the shared site script.
+            </div>
+            <div class="menu-log-item">
+              <span>Safe Storage</span>
+              Preferences are stored locally so they survive page reloads without changing Firestore records.
+            </div>
+          </section>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" type="button" data-customize-reset>Reset</button>
+          <button class="btn btn-primary" type="button" data-customize-save>Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" data-modal-root="dashboard-users" aria-hidden="true">
+      <div class="modal-content modal-dashboard-users glass" role="dialog" aria-modal="true" aria-labelledby="dashboard-users-title">
+        <button class="modal-close" type="button" data-modal-close="dashboard-users" aria-label="Close registered users modal">&times;</button>
+        <p class="section-label">Owner Console</p>
+        <h3 id="dashboard-users-title">Registered Users & Credentials</h3>
+        <p class="info-text">Review synced user records and the reserved owner account from one restored dashboard modal.</p>
+        <div class="actions">
+          <button class="btn btn-ghost" type="button" data-owner-users-toggle="all">All Users</button>
+          <button class="btn btn-ghost" type="button" data-owner-users-toggle="recent">Recent</button>
+          <button class="btn btn-ghost" type="button" data-owner-users-toggle="owner">Owner</button>
+        </div>
+        <div class="cards-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+          <article class="soft-panel owner-credential-item">
+            <div class="owner-credentials-head">
+              <h4 style="margin:0;">Fixed Owner Account</h4>
+              <span class="role-badge">Owner</span>
+            </div>
+            <p class="info-text">Reserved login route for the main site owner.</p>
+            <code data-owner-account-email></code>
+            <code data-owner-account-password></code>
+            <code data-owner-account-name></code>
+          </article>
+          <article class="soft-panel owner-credentials-section">
+            <div class="owner-credentials-head">
+              <h4 style="margin:0;">Synced Profiles</h4>
+              <p class="control-center-note" data-owner-users-summary></p>
+            </div>
+            <div class="menu-log owner-credentials-log" data-owner-users-log></div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" data-modal-root="popup" aria-hidden="true">
+      <div class="modal-content modal-popup glass" data-kind="info" role="dialog" aria-modal="true" aria-labelledby="popup-modal-title">
+        <button class="modal-close" type="button" data-modal-close="popup" aria-label="Close popup modal">&times;</button>
+        <p class="section-label popup-label" data-popup-label>Notice</p>
+        <h3 id="popup-modal-title" data-popup-title>Update</h3>
+        <p class="popup-message" data-popup-message></p>
+        <div class="modal-actions popup-actions">
+          <button class="btn btn-primary" type="button" data-popup-ack>Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hover-help-modal" data-hover-help-modal data-kind="action" aria-live="polite">
+      <p class="hover-help-label" data-hover-help-label>Quick Tip</p>
+      <p class="hover-help-message" data-hover-help-message></p>
+    </div>
+  `;
+}
+
+function ensureGlobalUiShells() {
+  if (!(document.body instanceof HTMLElement)) {
+    return;
+  }
+
+  if (document.querySelector("[data-modal-root='profile-customize']")) {
+    return;
+  }
+
+  document.body.insertAdjacentHTML("beforeend", buildGlobalModalMarkup());
+}
+
+function ensureMobileNoticeRoot() {
+  let root = document.querySelector("[data-mobile-inline-notice]");
+  if (root instanceof HTMLElement) {
+    return root;
+  }
+
+  const header = document.querySelector(".site-header");
+  if (!(header instanceof HTMLElement) || !(header.parentElement instanceof HTMLElement)) {
+    return null;
+  }
+
+  header.insertAdjacentHTML(
+    "afterend",
+    `
+      <div class="mobile-inline-notice soft-panel glass hidden" data-mobile-inline-notice aria-live="polite">
+        <div class="mobile-inline-notice-head">
+          <p class="section-label" data-mobile-inline-notice-label>Notice</p>
+          <button class="menu-close" type="button" data-mobile-inline-notice-close aria-label="Close mobile notice">&times;</button>
+        </div>
+        <p class="info-text mobile-inline-notice-message" data-mobile-inline-notice-message></p>
+      </div>
+    `
+  );
+
+  root = document.querySelector("[data-mobile-inline-notice]");
+  return root instanceof HTMLElement ? root : null;
+}
+
+function showMobileInlineNotice({
+  label = "Notice",
+  message = ""
+}) {
+  const root = ensureMobileNoticeRoot();
+  if (!(root instanceof HTMLElement)) {
+    return;
+  }
+
+  const labelNode = root.querySelector("[data-mobile-inline-notice-label]");
+  const messageNode = root.querySelector("[data-mobile-inline-notice-message]");
+
+  if (labelNode instanceof HTMLElement) {
+    labelNode.textContent = label;
+  }
+
+  if (messageNode instanceof HTMLElement) {
+    messageNode.textContent = message;
+  }
+
+  root.classList.remove("hidden");
+  root.classList.add("show");
+
+  window.clearTimeout(mobileNoticeTimer);
+  mobileNoticeTimer = window.setTimeout(() => {
+    root.classList.remove("show");
+    root.classList.add("hidden");
+  }, 4200);
+}
+
+function initCustomModals() {
+  ensureGlobalUiShells();
+
+  if (!(document.body instanceof HTMLElement)) {
+    return;
+  }
+
+  if (document.body.dataset.customModalBound === "1") {
+    renderRestoredModals();
+    return;
+  }
+
+  document.body.dataset.customModalBound = "1";
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const mobileNoticeClose = target.closest("[data-mobile-inline-notice-close]");
+    if (mobileNoticeClose) {
+      event.preventDefault();
+      const root = document.querySelector("[data-mobile-inline-notice]");
+      if (root instanceof HTMLElement) {
+        root.classList.remove("show");
+        root.classList.add("hidden");
+      }
+      return;
+    }
+
+    const closeButton = target.closest("[data-modal-close]");
+    if (closeButton) {
+      event.preventDefault();
+      closeModal(String(closeButton.getAttribute("data-modal-close") || ""));
+      return;
+    }
+
+    if (target instanceof HTMLElement && target.matches(".modal")) {
+      closeModal(String(target.getAttribute("data-modal-root") || ""));
+      return;
+    }
+
+    const saveButton = target.closest("[data-customize-save]");
+    if (saveButton) {
+      event.preventDefault();
+      void saveProfileCustomizeModal();
+      return;
+    }
+
+    const resetButton = target.closest("[data-customize-reset]");
+    if (resetButton) {
+      event.preventDefault();
+      resetProfileCustomizeModal();
+      return;
+    }
+
+    const clearAvatarButton = target.closest("[data-customize-avatar-clear]");
+    if (clearAvatarButton) {
+      event.preventDefault();
+      const modal = document.querySelector("[data-modal-root='profile-customize']");
+      if (modal instanceof HTMLElement) {
+        modal.dataset.dirty = "1";
+      }
+      setCustomizeAvatarDraft("");
+      showHoverHelp({
+        kind: "action",
+        label: "Avatar Removed",
+        message: "The avatar preview has been cleared. Save changes to apply it."
+      });
+      return;
+    }
+
+    const toggleButton = target.closest("[data-owner-users-toggle]");
+    if (toggleButton) {
+      event.preventDefault();
+      state.dashboardUserFilter = String(toggleButton.getAttribute("data-owner-users-toggle") || "all");
+      renderDashboardUsersModal();
+      return;
+    }
+
+    const popupAck = target.closest("[data-popup-ack]");
+    if (popupAck) {
+      event.preventDefault();
+      closeModal("popup");
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.matches("[data-customize-avatar-input]")) {
+      const modal = target instanceof Element ? target.closest("[data-modal-root='profile-customize']") : null;
+      if (modal instanceof HTMLElement) {
+        modal.dataset.dirty = "1";
+      }
+      return;
+    }
+
+    const [file] = Array.from(target.files || []);
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      target.value = "";
+      showPopupModal({
+        kind: "warning",
+        label: "Avatar Upload",
+        title: "Image Required",
+        message: "Please choose an image file for the profile avatar preview."
+      });
+      return;
+    }
+
+    if (file.size > 220000) {
+      target.value = "";
+      showHoverHelp({
+        kind: "required",
+        label: "Avatar Too Large",
+        message: "Keep the avatar under 220 KB so it can be stored locally without breaking the custom modal."
+      });
+      return;
+    }
+
+    void readFileAsDataUrl(file)
+      .then((image) => {
+        const modal = document.querySelector("[data-modal-root='profile-customize']");
+        if (modal instanceof HTMLElement) {
+          modal.dataset.dirty = "1";
+        }
+        setCustomizeAvatarDraft(image);
+        target.value = "";
+      })
+      .catch((error) => {
+        console.error("[e-Zone] Avatar preview load failed", error);
+        showPopupModal({
+          kind: "danger",
+          label: "Avatar Upload",
+          title: "Upload Failed",
+          message: "The selected avatar image could not be loaded."
+        });
+      });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeModal();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (shouldDisableModalUi()) {
+      closeModal();
+    }
+  });
+
+  document.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const modal = target.closest("[data-modal-root='profile-customize']");
+    if (modal instanceof HTMLElement) {
+      modal.dataset.dirty = "1";
+    }
+  });
+
+  renderRestoredModals();
+}
+
+function renderRestoredModals() {
+  updateProfileCustomizeModal();
+  renderDashboardUsersModal();
+}
+
+function updateProfileCustomizeModal() {
+  const modal = document.querySelector("[data-modal-root='profile-customize']");
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  if (modal.classList.contains("show") && modal.dataset.dirty === "1") {
+    const preview = modal.querySelector("[data-customize-avatar-preview]");
+    if (preview instanceof HTMLElement) {
+      const fallbackText = avatarLetters(getCurrentUserName() || state.currentUser?.email || "EZ");
+      applyAvatarPreferenceToElement(preview, getCustomizeAvatarDraft(), fallbackText);
+    }
+    return;
+  }
+
+  const prefs = normalizeUiPreferences(state.uiPreferences);
+  state.uiPreferences = prefs;
+
+  if (!("avatarImage" in modal.dataset)) {
+    modal.dataset.avatarImage = prefs.avatarImage;
+  }
+
+  const bioField = modal.querySelector("[data-customize-bio]");
+  const themeField = modal.querySelector("[data-customize-theme]");
+  const hideEmailField = modal.querySelector("[data-customize-hide-email]");
+  const hideActivityField = modal.querySelector("[data-customize-hide-activity]");
+  const hidePurchasesField = modal.querySelector("[data-customize-hide-purchases]");
+  const profilePrivateField = modal.querySelector("[data-customize-profile-private]");
+  const reduceMotionField = modal.querySelector("[data-customize-reduce-motion]");
+  const preview = modal.querySelector("[data-customize-avatar-preview]");
+
+  if (bioField instanceof HTMLTextAreaElement) {
+    bioField.value = prefs.customBio;
+  }
+
+  if (themeField instanceof HTMLSelectElement) {
+    themeField.value = prefs.theme;
+  }
+
+  if (hideEmailField instanceof HTMLInputElement) {
+    hideEmailField.checked = prefs.hideEmail;
+  }
+
+  if (hideActivityField instanceof HTMLInputElement) {
+    hideActivityField.checked = prefs.hideActivity;
+  }
+
+  if (hidePurchasesField instanceof HTMLInputElement) {
+    hidePurchasesField.checked = prefs.hidePurchases;
+  }
+
+  if (profilePrivateField instanceof HTMLInputElement) {
+    profilePrivateField.checked = prefs.profilePrivate;
+  }
+
+  if (reduceMotionField instanceof HTMLInputElement) {
+    reduceMotionField.checked = prefs.reduceMotion;
+  }
+
+  if (preview instanceof HTMLElement) {
+    const fallbackText = avatarLetters(getCurrentUserName() || state.currentUser?.email || "EZ");
+    applyAvatarPreferenceToElement(preview, getCustomizeAvatarDraft(), fallbackText);
+  }
+}
+
+function getCustomizeAvatarDraft() {
+  const modal = document.querySelector("[data-modal-root='profile-customize']");
+  if (!(modal instanceof HTMLElement)) {
+    return String(state.uiPreferences?.avatarImage || "");
+  }
+
+  return String(modal.dataset.avatarImage || state.uiPreferences?.avatarImage || "");
+}
+
+function setCustomizeAvatarDraft(image = "") {
+  const modal = document.querySelector("[data-modal-root='profile-customize']");
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  modal.dataset.avatarImage = String(image || "");
+  updateProfileCustomizeModal();
+}
+
+async function saveProfileCustomizeModal() {
+  const modal = document.querySelector("[data-modal-root='profile-customize']");
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  const bioField = modal.querySelector("[data-customize-bio]");
+  const themeField = modal.querySelector("[data-customize-theme]");
+  const hideEmailField = modal.querySelector("[data-customize-hide-email]");
+  const hideActivityField = modal.querySelector("[data-customize-hide-activity]");
+  const hidePurchasesField = modal.querySelector("[data-customize-hide-purchases]");
+  const profilePrivateField = modal.querySelector("[data-customize-profile-private]");
+  const reduceMotionField = modal.querySelector("[data-customize-reduce-motion]");
+
+  state.uiPreferences = normalizeUiPreferences({
+    theme: themeField instanceof HTMLSelectElement ? themeField.value : "",
+    customBio: bioField instanceof HTMLTextAreaElement ? bioField.value : "",
+    avatarImage: getCustomizeAvatarDraft(),
+    hideEmail: hideEmailField instanceof HTMLInputElement ? hideEmailField.checked : false,
+    hideActivity: hideActivityField instanceof HTMLInputElement ? hideActivityField.checked : false,
+    hidePurchases: hidePurchasesField instanceof HTMLInputElement ? hidePurchasesField.checked : false,
+    profilePrivate: profilePrivateField instanceof HTMLInputElement ? profilePrivateField.checked : false,
+    reduceMotion: reduceMotionField instanceof HTMLInputElement ? reduceMotionField.checked : false
+  });
+
+  persistUiPreferences();
+  modal.dataset.dirty = "0";
+  syncAuthUi();
+  renderCommonMenuStats();
+  updateProfileCustomizeModal();
+  closeModal("profile-customize");
+
+  showPopupModal({
+    kind: "success",
+    label: "Profile Saved",
+    title: "Custom Modal Preferences Restored",
+    message: "Your profile appearance and privacy settings have been saved locally for this browser."
+  });
+}
+
+function resetProfileCustomizeModal() {
+  state.uiPreferences = getDefaultUiPreferences();
+  setCustomizeAvatarDraft("");
+  const modal = document.querySelector("[data-modal-root='profile-customize']");
+  if (modal instanceof HTMLElement) {
+    modal.dataset.dirty = "0";
+  }
+  updateProfileCustomizeModal();
+  showHoverHelp({
+    kind: "action",
+    label: "Defaults Loaded",
+    message: "Default settings are ready. Press Save Changes to apply the reset."
+  });
+}
+
+function getDashboardModalUsers() {
+  const allUsers = state.users.length ? state.users.slice() : [];
+  const currentSessionUser = mapUserFromCurrentSession();
+
+  if (!allUsers.length && currentSessionUser) {
+    allUsers.push(currentSessionUser);
+  }
+
+  const filter = String(state.dashboardUserFilter || "all");
+
+  if (filter === "owner") {
+    return allUsers.filter((user) => isOwnerEmail(user.email || ""));
+  }
+
+  if (filter === "recent") {
+    return allUsers.slice().sort(sortByNewest).slice(0, 8);
+  }
+
+  return allUsers.slice().sort(sortByNewest);
+}
+
+function renderDashboardUsersModal() {
+  const modal = document.querySelector("[data-modal-root='dashboard-users']");
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  const emailNode = modal.querySelector("[data-owner-account-email]");
+  const passwordNode = modal.querySelector("[data-owner-account-password]");
+  const nameNode = modal.querySelector("[data-owner-account-name]");
+  const summaryNode = modal.querySelector("[data-owner-users-summary]");
+  const logNode = modal.querySelector("[data-owner-users-log]");
+
+  if (emailNode instanceof HTMLElement) {
+    emailNode.textContent = `Email: ${OWNER_ACCOUNT.email}`;
+  }
+
+  if (passwordNode instanceof HTMLElement) {
+    passwordNode.textContent = `Password: ${OWNER_ACCOUNT.password}`;
+  }
+
+  if (nameNode instanceof HTMLElement) {
+    nameNode.textContent = `Full Name: ${OWNER_ACCOUNT.fullName}`;
+  }
+
+  modal.querySelectorAll("[data-owner-users-toggle]").forEach((button) => {
+    const active = String(button.getAttribute("data-owner-users-toggle") || "") === String(state.dashboardUserFilter || "all");
+    button.classList.toggle("is-active", active);
+  });
+
+  if (!(logNode instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!state.authResolved) {
+    logNode.innerHTML = "<div class='menu-log-item'><span>Loading session...</span>Waiting for Firebase Authentication.</div>";
+    return;
+  }
+
+  if (!state.currentUser || !isOwnerUser()) {
+    logNode.innerHTML = "<div class='menu-log-item'><span>Owner access required</span>This restored modal is visible only to the fixed owner account.</div>";
+    return;
+  }
+
+  const allUsers = state.users.slice().sort(sortByNewest);
+  const visibleUsers = getDashboardModalUsers();
+
+  if (summaryNode instanceof HTMLElement) {
+    summaryNode.textContent = `${visibleUsers.length} shown / ${allUsers.length || visibleUsers.length} total`;
+  }
+
+  logNode.innerHTML = visibleUsers.length
+    ? visibleUsers.map((user) => `
+        <div class="menu-log-item">
+          <span>${escapeHtml(user.name || user.email || "User")}</span>
+          ${escapeHtml(user.email || "No email")}<br>
+          Role: ${escapeHtml(String(user.role || "user"))} - Joined ${formatDateTime(user.createdAt)}
+        </div>
+      `).join("")
+    : "<div class='menu-log-item'><span>No users yet</span>Registered users will appear here once Firestore sync completes.</div>";
+}
+
+function openModal(name) {
+  const modal = document.querySelector(`[data-modal-root="${name}"]`);
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  if (shouldDisableModalUi()) {
+    if (name === "profile-customize") {
+      window.location.href = state.currentUser ? getPostLoginDestination() : "login.html";
+      return;
+    }
+
+    if (name === "dashboard-users") {
+      window.location.href = isOwnerUser() ? "logs.html" : "login.html";
+      return;
+    }
+
+    return;
+  }
+
+  if (name === "profile-customize" && !state.currentUser) {
+    showPopupModal({
+      kind: "warning",
+      label: "Login Required",
+      title: "Sign In First",
+      message: "Log in first to use the restored profile customization modal."
+    });
+    return;
+  }
+
+  if (name === "dashboard-users" && !isOwnerUser()) {
+    showPopupModal({
+      kind: "danger",
+      label: "Owner Only",
+      title: "Access Restricted",
+      message: "This modal is available only to the reserved owner account."
+    });
+    return;
+  }
+
+  if (name === "profile-customize") {
+    modal.dataset.dirty = "0";
+    modal.dataset.avatarImage = String(state.uiPreferences?.avatarImage || "");
+  }
+
+  closeModal();
+  renderRestoredModals();
+  closeUserMenu();
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+
+  const focusTarget = modal.querySelector("button, input, textarea, select");
+  if (focusTarget instanceof HTMLElement) {
+    window.setTimeout(() => {
+      focusTarget.focus();
+    }, 20);
+  }
+}
+
+function closeModal(name = "") {
+  const openModals = name
+    ? Array.from(document.querySelectorAll(`[data-modal-root="${name}"]`))
+    : Array.from(document.querySelectorAll(".modal.show"));
+
+  openModals.forEach((modal) => {
+    if (!(modal instanceof HTMLElement)) {
+      return;
+    }
+
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+  });
+
+  if (!document.querySelector(".modal.show")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function showPopupModal({
+  kind = "info",
+  label = "Notice",
+  title = "Update",
+  message = "",
+  actionLabel = "Close"
+}) {
+  if (shouldDisableModalUi()) {
+    showMobileInlineNotice({
+      label,
+      message: title === label || !title ? message : `${title}: ${message}`
+    });
+    return;
+  }
+
+  ensureGlobalUiShells();
+
+  const popup = document.querySelector("[data-modal-root='popup']");
+  if (!(popup instanceof HTMLElement)) {
+    return;
+  }
+
+  const content = popup.querySelector(".modal-popup");
+  const labelNode = popup.querySelector("[data-popup-label]");
+  const titleNode = popup.querySelector("[data-popup-title]");
+  const messageNode = popup.querySelector("[data-popup-message]");
+  const actionNode = popup.querySelector("[data-popup-ack]");
+
+  if (content instanceof HTMLElement) {
+    content.setAttribute("data-kind", kind);
+  }
+
+  if (labelNode instanceof HTMLElement) {
+    labelNode.textContent = label;
+  }
+
+  if (titleNode instanceof HTMLElement) {
+    titleNode.textContent = title;
+  }
+
+  if (messageNode instanceof HTMLElement) {
+    messageNode.textContent = message;
+  }
+
+  if (actionNode instanceof HTMLElement) {
+    actionNode.textContent = actionLabel;
+  }
+
+  openModal("popup");
+}
+
+function showHoverHelp({
+  kind = "action",
+  label = "Quick Tip",
+  message = ""
+}) {
+  if (shouldDisableModalUi()) {
+    showMobileInlineNotice({
+      label,
+      message
+    });
+    return;
+  }
+
+  const root = document.querySelector("[data-hover-help-modal]");
+  const labelNode = document.querySelector("[data-hover-help-label]");
+  const messageNode = document.querySelector("[data-hover-help-message]");
+
+  if (!(root instanceof HTMLElement) || !(labelNode instanceof HTMLElement) || !(messageNode instanceof HTMLElement)) {
+    return;
+  }
+
+  root.setAttribute("data-kind", kind);
+  labelNode.textContent = label;
+  messageNode.textContent = message;
+  root.classList.add("show");
+
+  window.clearTimeout(hoverHelpTimer);
+  hoverHelpTimer = window.setTimeout(() => {
+    root.classList.remove("show");
+  }, 3200);
+}
+
+function buildFallbackProfile(user, preferredName = "") {
+  const fallbackName = preferredName
+    || String(user?.displayName || "").trim()
+    || String(user?.email || "Reader").split("@")[0];
+  const owner = isOwnerEmail(user?.email || "");
+
+  return {
+    id: user?.uid || "",
+    uid: user?.uid || "",
+    name: owner ? OWNER_ACCOUNT.fullName : fallbackName,
+    email: String(user?.email || ""),
+    role: owner ? OWNER_ACCOUNT.role : "user",
+    createdAt: safeDate(user?.metadata?.creationTime) || new Date(),
+    syncError: true
+  };
+}
+
+async function syncCurrentUserProfile(user, preferredName = "") {
+  try {
+    return await ensureUserProfileDocument(user, preferredName);
+  } catch (error) {
+    console.error("[e-Zone] Firestore profile sync failed", error);
+    return buildFallbackProfile(user, preferredName);
+  }
+}
+
 async function signInOrCreateOwnerAccount() {
   try {
     const credential = await signInWithEmailAndPassword(auth, OWNER_ACCOUNT.email, OWNER_ACCOUNT.password);
     await updateProfile(credential.user, { displayName: OWNER_ACCOUNT.fullName });
-    await ensureUserProfileDocument(credential.user, OWNER_ACCOUNT.fullName);
     return credential;
   } catch (error) {
     const code = String(error && typeof error === "object" && "code" in error ? error.code : "");
@@ -82,7 +1025,6 @@ async function signInOrCreateOwnerAccount() {
     try {
       const credential = await createUserWithEmailAndPassword(auth, OWNER_ACCOUNT.email, OWNER_ACCOUNT.password);
       await updateProfile(credential.user, { displayName: OWNER_ACCOUNT.fullName });
-      await ensureUserProfileDocument(credential.user, OWNER_ACCOUNT.fullName);
       return credential;
     } catch (createError) {
       const createCode = String(
@@ -110,6 +1052,8 @@ async function initApp() {
   initPageLoader();
   initUserMenu();
   initPasswordToggles();
+  loadUiPreferences();
+  initCustomModals();
   bindGlobalActions();
   bindSignupForm();
   bindLoginForm();
@@ -138,7 +1082,7 @@ async function initApp() {
     try {
       if (user) {
         console.info("[e-Zone] Authenticated user detected:", user.email || user.uid);
-        state.currentProfile = await ensureUserProfileDocument(user);
+        state.currentProfile = await syncCurrentUserProfile(user);
         await Promise.all([loadUsers(), loadFeedback()]);
       } else {
         console.info("[e-Zone] No authenticated user");
@@ -278,7 +1222,7 @@ function bindGlobalActions() {
     const customizeButton = target.closest('[data-open-modal="profile-customize"]');
     if (customizeButton) {
       event.preventDefault();
-      window.location.href = getPostLoginDestination();
+      openModal("profile-customize");
     }
   });
 }
@@ -347,9 +1291,15 @@ function bindSignupForm() {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: name });
-      await ensureUserProfileDocument(credential.user, name);
+      const profile = await syncCurrentUserProfile(credential.user, name);
       console.info("[e-Zone] Signup complete for", email);
-      setStatus(status, "Account created successfully. Redirecting...", false);
+      setStatus(
+        status,
+        profile.syncError
+          ? "Account created. Firestore profile sync is pending, but you can continue."
+          : "Account created successfully. Redirecting...",
+        false
+      );
       form.reset();
       window.location.href = getPostLoginDestination(credential.user);
     } catch (error) {
@@ -397,9 +1347,15 @@ function bindLoginForm() {
       const credential = isOwnerEmail(email)
         ? await signInOrCreateOwnerAccount()
         : await signInWithEmailAndPassword(auth, email, password);
-      await ensureUserProfileDocument(credential.user);
+      const profile = await syncCurrentUserProfile(credential.user);
       console.info("[e-Zone] Login complete for", email);
-      setStatus(status, "Login successful. Redirecting...", false);
+      setStatus(
+        status,
+        profile.syncError
+          ? "Login succeeded. Firestore profile sync is pending, but your session is active."
+          : "Login successful. Redirecting...",
+        false
+      );
       form.reset();
       window.location.href = getPostLoginDestination(credential.user);
     } catch (error) {
@@ -718,7 +1674,7 @@ function bindAdminPage() {
 function bindDashboardShortcuts() {
   const bindings = [
     ["dash-users-card", () => {
-      window.location.href = "logs.html";
+      openModal("dashboard-users");
     }],
     ["dash-books-card", () => {
       window.location.href = "uploaded-books.html";
@@ -956,6 +1912,7 @@ function renderAllPages() {
   renderPurchaseLinksPage();
   renderAdminPage();
   renderCommonMenuStats();
+  renderRestoredModals();
 }
 
 function syncAuthUi() {
@@ -995,15 +1952,18 @@ function syncAuthUi() {
   );
   setManyTexts(
     "[data-user-bio]",
-    isOwner
-      ? "Owner controls are unlocked for Abir Biswas."
-      : isLoggedIn
-        ? "Connected through Firebase Authentication."
-        : "Please sign in to continue."
+    getResolvedUserBio(
+      isOwner
+        ? "Owner controls are unlocked for Abir Biswas."
+        : isLoggedIn
+          ? "Connected through Firebase Authentication."
+          : "Please sign in to continue."
+    )
   );
   setManyTexts("[data-user-meta]", memberSince);
   setManyTexts("[data-profile-avatar]", initials);
   setManyTexts("[data-user-avatar]", initials);
+  applyAvatarPreferenceToTargets();
 
   document.body.classList.toggle("admin-mode", isOwner);
 
@@ -1026,6 +1986,8 @@ function syncAuthUi() {
   if (!isLoggedIn) {
     closeUserMenu();
   }
+
+  updateProfileCustomizeModal();
 }
 
 function renderHomeCategories() {
@@ -2199,17 +3161,20 @@ function readFileAsDataUrl(file) {
 
 function humanizeAuthError(error) {
   const code = String(error && typeof error === "object" && "code" in error ? error.code : "");
+  const message = String(error && typeof error === "object" && "message" in error ? error.message : "").trim();
 
   const messages = {
     "auth/email-already-in-use": "That email is already registered.",
     "auth/invalid-email": "Please enter a valid email address.",
     "auth/invalid-credential": "Incorrect email or password.",
-    "auth/owner-account-mismatch": "This reserved owner email already exists in Firebase with a different password. Update it in the Firebase console to 6967#6769 if you want this exact owner login to work.",
+    "auth/owner-account-mismatch": "This reserved owner email already exists in Firebase with a different password. Update it in the Firebase console to #youtuber#69# if you want this exact owner login to work.",
     "auth/missing-password": "Password is required.",
+    "auth/operation-not-allowed": "Email/password login is not enabled in Firebase Authentication yet.",
+    "permission-denied": "Firestore denied access while finishing login. Check your Firebase rules for users and admins.",
     "auth/weak-password": "Password is too weak. Use at least 8 characters.",
     "auth/network-request-failed": "Network error. Check your internet connection and try again.",
     "auth/too-many-requests": "Too many attempts. Please wait a moment and try again."
   };
 
-  return messages[code] || "The authentication request could not be completed.";
+  return messages[code] || message || "The authentication request could not be completed.";
 }
