@@ -11,15 +11,17 @@ This project was originally built around local JSON storage, which does not work
 - Static website with no Express or Node backend
 - Firebase Authentication for signup, login, logout, and session tracking
 - Social sign-in with Google, Apple, Microsoft, Facebook, and GitHub through Firebase Authentication
+- Branded social sign-in buttons with provider logos on the login and signup screens
 - Firestore-based storage for users, owner/admin records, books, and feedback
 - Dynamic book loading on the frontend
 - Feedback form that writes directly to Firestore
+- Restored animated footer quick links and social links across shared pages
 - Owner-only access for management pages such as dashboard, logs, uploads, and purchase links
 - User dashboard for normal authenticated users
 - Restored custom modal system for profile customization, popups, and owner dashboard actions
 - Mobile-safe fallback behavior that disables blocking custom pop-up modals on mobile browsers
-- Local profile preferences such as theme, avatar preview, privacy toggles, and reduced motion
-- Upgraded action center with a shared theme toggle, quick links, live page context, and account status cards
+- Local profile preferences such as a dark/light theme choice, avatar preview, privacy toggles, and reduced motion
+- Upgraded action center with a shared dark/light theme toggle, quick links, live page context, an identity badge, and account status cards
 - Vercel-friendly architecture with persistent cloud data storage
 
 ## Tech Stack
@@ -93,7 +95,8 @@ The site currently uses these main collections:
 - The restored custom modal system is injected and managed from the shared frontend script
 - On mobile browsers, blocking custom modal popups are replaced with inline notices or normal page navigation
 - Profile customization preferences are stored locally in the browser so they persist across reloads
-- The action center is enhanced from the shared script so every page gets the same quick links, live stats, and theme controls
+- The action center is enhanced from the shared script so every page gets the same quick links, live stats, a dark/light-only theme toggle, and an identity badge with avatar plus role
+- Shared footer links are enhanced from the frontend script so hover animations and social link pills stay consistent across pages
 
 ## Authentication Notes
 

@@ -154,7 +154,7 @@ function shouldDisableModalUi() {
 
 function getDefaultUiPreferences() {
   return {
-    theme: "",
+    theme: "light",
     customBio: "",
     avatarImage: "",
     hideEmail: false,
@@ -169,7 +169,7 @@ function normalizeUiPreferences(value = {}) {
   const next = value && typeof value === "object" ? value : {};
 
   return {
-    theme: ["", "light", "dark"].includes(String(next.theme || "")) ? String(next.theme || "") : "",
+    theme: ["light", "dark"].includes(String(next.theme || "")) ? String(next.theme || "") : "light",
     customBio: String(next.customBio || "").trim().slice(0, 220),
     avatarImage: String(next.avatarImage || ""),
     hideEmail: Boolean(next.hideEmail),
@@ -190,7 +190,7 @@ function readUiPreferences() {
     return normalizeUiPreferences({
       ...defaults,
       ...parsed,
-      theme: theme === "light" || theme === "dark" ? theme : ""
+      theme: theme === "dark" ? "dark" : "light"
     });
   } catch (error) {
     console.warn("[e-Zone] Could not load local profile preferences", error);
@@ -221,11 +221,7 @@ function persistUiPreferences() {
       })
     );
 
-    if (next.theme) {
-      window.localStorage.setItem(STORAGE_KEYS.theme, next.theme);
-    } else {
-      window.localStorage.removeItem(STORAGE_KEYS.theme);
-    }
+    window.localStorage.setItem(STORAGE_KEYS.theme, next.theme);
   } catch (error) {
     console.warn("[e-Zone] Could not save local profile preferences", error);
   }
@@ -237,11 +233,7 @@ function applyUiPreferences() {
   const prefs = normalizeUiPreferences(state.uiPreferences);
   state.uiPreferences = prefs;
 
-  if (prefs.theme === "light" || prefs.theme === "dark") {
-    document.documentElement.setAttribute("data-theme", prefs.theme);
-  } else {
-    document.documentElement.removeAttribute("data-theme");
-  }
+  document.documentElement.setAttribute("data-theme", prefs.theme);
 
   document.body.classList.toggle("hide-email", prefs.hideEmail);
   document.body.classList.toggle("hide-activity", prefs.hideActivity);
@@ -324,7 +316,6 @@ function buildGlobalModalMarkup() {
             <div class="field">
               <label for="customize-theme">Theme</label>
               <select class="select" id="customize-theme" data-customize-theme>
-                <option value="">System Default</option>
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
@@ -769,7 +760,7 @@ async function saveProfileCustomizeModal() {
   const reduceMotionField = modal.querySelector("[data-customize-reduce-motion]");
 
   state.uiPreferences = normalizeUiPreferences({
-    theme: themeField instanceof HTMLSelectElement ? themeField.value : "",
+    theme: themeField instanceof HTMLSelectElement ? themeField.value : "light",
     customBio: bioField instanceof HTMLTextAreaElement ? bioField.value : "",
     avatarImage: getCustomizeAvatarDraft(),
     hideEmail: hideEmailField instanceof HTMLInputElement ? hideEmailField.checked : false,
@@ -1266,6 +1257,7 @@ async function initApp() {
 
   initPageLoader();
   initUserMenu();
+  initFooterLinkEffects();
   initPasswordToggles();
   loadUiPreferences();
   initCustomModals();
@@ -1395,6 +1387,121 @@ function closeUserMenu() {
   const menu = document.querySelector("[data-user-menu]");
   overlay?.classList.remove("open");
   menu?.classList.remove("open");
+}
+
+function initFooterLinkEffects() {
+  document.querySelectorAll(".site-footer .footer-links").forEach((group) => {
+    if (!(group instanceof HTMLElement)) {
+      return;
+    }
+
+    const links = Array.from(group.querySelectorAll("a"));
+    const socialLinks = links.filter((link) => {
+      return link instanceof HTMLAnchorElement
+        && (/^https?:\/\//i.test(String(link.getAttribute("href") || "")) || link.target === "_blank");
+    });
+
+    if (socialLinks.length) {
+      group.classList.add("footer-social");
+    }
+
+    socialLinks.forEach((link) => {
+      if (!(link instanceof HTMLAnchorElement)) {
+        return;
+      }
+
+      link.classList.add("footer-social-link");
+
+      if (link.dataset.footerEnhanced === "1") {
+        return;
+      }
+
+      const label = String(link.textContent || "").trim();
+      const icon = createFooterSocialIcon(link.href);
+      const text = document.createElement("span");
+      text.className = "footer-social-label";
+      text.textContent = label;
+
+      link.textContent = "";
+      link.append(icon, text);
+      link.dataset.footerEnhanced = "1";
+    });
+  });
+}
+
+function createFooterSocialIcon(href = "") {
+  const key = getFooterSocialProviderKey(href);
+  const icon = document.createElement("span");
+  icon.className = `footer-social-icon provider-${key}`;
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML = getFooterSocialIconSvg(key);
+  return icon;
+}
+
+function getFooterSocialProviderKey(href = "") {
+  const url = String(href || "").toLowerCase();
+
+  if (url.includes("youtube.com") || url.includes("youtu.be")) {
+    return "youtube";
+  }
+
+  if (url.includes("instagram.com")) {
+    return "instagram";
+  }
+
+  if (url.includes("facebook.com")) {
+    return "facebook";
+  }
+
+  if (url.includes("github.com")) {
+    return "github";
+  }
+
+  return "external";
+}
+
+function getFooterSocialIconSvg(key = "") {
+  const icons = {
+    youtube: `
+      <svg viewBox="0 0 24 24">
+        <path fill="#ff3b30" d="M23.5 7.2a3 3 0 0 0-2.1-2.13C19.53 4.5 12 4.5 12 4.5s-7.53 0-9.4.57A3 3 0 0 0 .5 7.2C0 9.08 0 12 0 12s0 2.92.5 4.8a3 3 0 0 0 2.1 2.13c1.87.57 9.4.57 9.4.57s7.53 0 9.4-.57a3 3 0 0 0 2.1-2.13c.5-1.88.5-4.8.5-4.8s0-2.92-.5-4.8Z"></path>
+        <path fill="#fff" d="m9.75 15.5 6.25-3.5-6.25-3.5v7Z"></path>
+      </svg>
+    `,
+    instagram: `
+      <svg viewBox="0 0 24 24">
+        <rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5.2" fill="none" stroke="url(#igGradientFooter)" stroke-width="1.8"></rect>
+        <circle cx="12" cy="12" r="4.1" fill="none" stroke="url(#igGradientFooter)" stroke-width="1.8"></circle>
+        <circle cx="17.2" cy="6.8" r="1.2" fill="url(#igGradientFooter)"></circle>
+        <defs>
+          <linearGradient id="igGradientFooter" x1="3" x2="21" y1="21" y2="3" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#f58529"></stop>
+            <stop offset=".35" stop-color="#feda77"></stop>
+            <stop offset=".62" stop-color="#dd2a7b"></stop>
+            <stop offset=".86" stop-color="#8134af"></stop>
+            <stop offset="1" stop-color="#515bd4"></stop>
+          </linearGradient>
+        </defs>
+      </svg>
+    `,
+    facebook: `
+      <svg viewBox="0 0 24 24">
+        <path fill="#1877f2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07c0 6.03 4.39 11.02 10.13 11.93v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.7 4.54-4.7 1.31 0 2.69.24 2.69.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.88v2.27h3.32l-.53 3.49H13.9V24C19.62 23.1 24 18.11 24 12.07Z"></path>
+      </svg>
+    `,
+    github: `
+      <svg viewBox="0 0 24 24">
+        <path fill="currentColor" d="M12 .8a11.2 11.2 0 0 0-3.54 21.83c.56.1.76-.24.76-.54l-.02-2.08c-3.11.67-3.77-1.34-3.77-1.34-.5-1.29-1.24-1.63-1.24-1.63-1.02-.7.08-.69.08-.69 1.12.08 1.71 1.16 1.71 1.16 1 .1.79 2.5 3.24 1.78.1-.73.39-1.23.71-1.51-2.48-.28-5.09-1.25-5.09-5.56 0-1.23.44-2.23 1.15-3.02-.12-.28-.5-1.42.11-2.96 0 0 .94-.3 3.08 1.15a10.7 10.7 0 0 1 5.6 0c2.13-1.45 3.07-1.15 3.07-1.15.62 1.54.24 2.68.12 2.96.72.79 1.15 1.79 1.15 3.02 0 4.32-2.62 5.28-5.12 5.55.4.35.76 1.03.76 2.08l-.01 3.08c0 .3.2.65.77.54A11.2 11.2 0 0 0 12 .8Z"></path>
+      </svg>
+    `,
+    external: `
+      <svg viewBox="0 0 24 24">
+        <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M14 5h5v5M10 14 19 5M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"></path>
+      </svg>
+    `
+  };
+
+  return icons[key] || icons.external;
 }
 
 function initPasswordToggles() {
@@ -2149,23 +2256,6 @@ function initActionCenterUpgrade() {
       cycleActionCenterTheme();
     }
   });
-
-  try {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const rerender = () => {
-      if (!String(state.uiPreferences?.theme || "")) {
-        renderActionCenterUpgrade();
-      }
-    };
-
-    if (typeof media.addEventListener === "function") {
-      media.addEventListener("change", rerender);
-    } else if (typeof media.addListener === "function") {
-      media.addListener(rerender);
-    }
-  } catch (error) {
-    console.warn("[e-Zone] Could not bind system theme listener", error);
-  }
 }
 
 function renderActionCenterUpgrade() {
@@ -2213,11 +2303,9 @@ function ensureActionCenterUpgradeMarkup() {
 
 function renderActionCenterThemePill() {
   const resolvedTheme = getResolvedThemeMode();
-  const storedTheme = String(state.uiPreferences?.theme || "");
-  const label = storedTheme ? capitalizeLabel(storedTheme) : "Auto";
-  const ariaLabel = storedTheme
-    ? `Theme is set to ${label}. Click to cycle theme mode.`
-    : `Theme follows your device. Click to cycle theme mode.`;
+  const label = capitalizeLabel(resolvedTheme);
+  const nextLabel = resolvedTheme === "dark" ? "Light" : "Dark";
+  const ariaLabel = `Theme is set to ${label}. Click to switch to ${nextLabel} mode.`;
 
   document.querySelectorAll("[data-theme-pill-host]").forEach((host) => {
     if (!(host instanceof HTMLElement)) {
@@ -2255,6 +2343,11 @@ function renderActionCenterThemePill() {
 function renderActionCenterSection() {
   const isLoggedIn = Boolean(state.currentUser);
   const isOwner = isOwnerUser();
+  const currentName = getCurrentUserName();
+  const currentEmail = state.currentUser?.email || "Please login";
+  const identityRole = isOwner ? "Owner Access" : isLoggedIn ? "Member Access" : "Guest Access";
+  const identityMeta = isOwner ? OWNER_ACCOUNT.fullName : isLoggedIn ? currentName || currentEmail : "Guest User";
+  const identityAvatar = avatarLetters(isLoggedIn ? currentName || currentEmail : "EZ");
   const myFeedback = isLoggedIn
     ? state.feedback.filter((item) => normalizeEmail(item.userEmail) === normalizeEmail(state.currentUser?.email || ""))
     : [];
@@ -2285,6 +2378,8 @@ function renderActionCenterSection() {
   setManyTexts("[data-action-center-books]", state.booksLoaded ? String(state.books.length) : "--");
   setManyTexts("[data-action-center-feedback-label]", feedbackLabel);
   setManyTexts("[data-action-center-feedback]", feedbackValue);
+  setManyTexts("[data-action-center-role]", identityRole);
+  setManyTexts("[data-action-center-meta]", identityMeta);
 
   document.querySelectorAll("[data-action-center-session]").forEach((chip) => {
     if (!(chip instanceof HTMLElement)) {
@@ -2294,6 +2389,14 @@ function renderActionCenterSection() {
     chip.textContent = sessionLabel;
     chip.classList.remove("is-owner", "is-member", "is-guest");
     chip.classList.add(isOwner ? "is-owner" : isLoggedIn ? "is-member" : "is-guest");
+  });
+
+  document.querySelectorAll("[data-action-center-avatar]").forEach((avatar) => {
+    applyAvatarPreferenceToElement(
+      avatar,
+      String(state.uiPreferences?.avatarImage || ""),
+      identityAvatar
+    );
   });
 
   document.querySelectorAll("[data-action-center-links]").forEach((root) => {
@@ -2327,6 +2430,13 @@ function buildActionCenterSectionMarkup() {
           <p class="control-center-note" data-action-center-note>Quick links and live status will appear here.</p>
         </div>
         <span class="action-center-chip" data-action-center-session>Guest</span>
+      </div>
+      <div class="action-center-identity">
+        <span class="profile-avatar action-center-avatar" data-action-center-avatar>EZ</span>
+        <div class="action-center-identity-copy">
+          <strong data-action-center-role>Guest Access</strong>
+          <span data-action-center-meta>Guest User</span>
+        </div>
       </div>
       <div class="action-center-grid" data-action-center-links></div>
       <div class="action-center-stats">
@@ -2480,17 +2590,12 @@ function getActionCenterActivityItems(isOwner, isLoggedIn, myFeedback, pageLabel
 }
 
 function getResolvedThemeMode() {
-  const preferred = String(state.uiPreferences?.theme || "");
-  if (preferred === "light" || preferred === "dark") {
-    return preferred;
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return normalizeUiPreferences(state.uiPreferences).theme;
 }
 
 function cycleActionCenterTheme() {
-  const current = String(state.uiPreferences?.theme || "");
-  const next = !current ? "dark" : current === "dark" ? "light" : "";
+  const current = getResolvedThemeMode();
+  const next = current === "dark" ? "light" : "dark";
 
   state.uiPreferences = normalizeUiPreferences({
     ...state.uiPreferences,
@@ -2500,9 +2605,7 @@ function cycleActionCenterTheme() {
   updateProfileCustomizeModal();
   renderActionCenterUpgrade();
 
-  const message = next
-    ? `${capitalizeLabel(next)} theme enabled.`
-    : "Theme set back to system default.";
+  const message = `${capitalizeLabel(next)} theme enabled.`;
 
   if (shouldDisableModalUi()) {
     showMobileInlineNotice(message, false);
