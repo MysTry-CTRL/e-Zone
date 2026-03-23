@@ -90,6 +90,7 @@ const state = {
 
 let mobileNoticeTimer = 0;
 let hoverHelpTimer = 0;
+let activeLinkPreviewElement = null;
 
 function isOwnerEmail(email) {
   return normalizeEmail(email) === normalizeEmail(OWNER_ACCOUNT.email);
@@ -1012,12 +1013,33 @@ function showPopupModal({
   openModal("popup");
 }
 
-function showHoverHelp({
-  kind = "action",
-  label = "Quick Tip",
-  message = ""
-}) {
+function hideHoverHelp() {
+  const root = document.querySelector("[data-hover-help-modal]");
+  window.clearTimeout(hoverHelpTimer);
+
+  if (root instanceof HTMLElement) {
+    root.classList.remove("show");
+  }
+}
+
+function showHoverHelp(options = {}) {
+  const normalized = typeof options === "string"
+    ? { kind: "action", label: "Quick Tip", message: options }
+    : options && typeof options === "object"
+      ? options
+      : {};
+  const {
+    kind = "action",
+    label = "Quick Tip",
+    message = "",
+    persist = false
+  } = normalized;
+
   if (shouldDisableModalUi()) {
+    if (persist) {
+      return;
+    }
+
     showMobileInlineNotice({
       label,
       message
@@ -1039,9 +1061,12 @@ function showHoverHelp({
   root.classList.add("show");
 
   window.clearTimeout(hoverHelpTimer);
-  hoverHelpTimer = window.setTimeout(() => {
-    root.classList.remove("show");
-  }, 3200);
+
+  if (!persist) {
+    hoverHelpTimer = window.setTimeout(() => {
+      root.classList.remove("show");
+    }, 3200);
+  }
 }
 
 function buildFallbackProfile(user, preferredName = "") {
@@ -1261,6 +1286,7 @@ async function initApp() {
   initPasswordToggles();
   loadUiPreferences();
   initCustomModals();
+  initLinkPreviewPopups();
   initActionCenterUpgrade();
   bindGlobalActions();
   bindSignupForm();
@@ -1502,6 +1528,149 @@ function getFooterSocialIconSvg(key = "") {
   };
 
   return icons[key] || icons.external;
+}
+
+function initLinkPreviewPopups() {
+  if (!(document.body instanceof HTMLElement) || document.body.dataset.linkPreviewBound === "1") {
+    return;
+  }
+
+  document.body.dataset.linkPreviewBound = "1";
+
+  document.addEventListener("mouseover", (event) => {
+    if (shouldDisableModalUi()) {
+      return;
+    }
+
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement) || !shouldShowLinkPreview(anchor)) {
+      return;
+    }
+
+    if (activeLinkPreviewElement === anchor) {
+      return;
+    }
+
+    activeLinkPreviewElement = anchor;
+    showHoverHelp({
+      kind: "link",
+      label: getLinkPreviewLabel(anchor),
+      message: getLinkPreviewMessage(anchor),
+      persist: true
+    });
+  });
+
+  document.addEventListener("mouseout", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement) || anchor !== activeLinkPreviewElement) {
+      return;
+    }
+
+    const related = event.relatedTarget;
+    if (related instanceof Node && anchor.contains(related)) {
+      return;
+    }
+
+    activeLinkPreviewElement = null;
+    hideHoverHelp();
+  });
+
+  document.addEventListener("focusin", (event) => {
+    if (shouldDisableModalUi()) {
+      return;
+    }
+
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement) || !shouldShowLinkPreview(anchor)) {
+      return;
+    }
+
+    activeLinkPreviewElement = anchor;
+    showHoverHelp({
+      kind: "link",
+      label: getLinkPreviewLabel(anchor),
+      message: getLinkPreviewMessage(anchor),
+      persist: true
+    });
+  });
+
+  document.addEventListener("focusout", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement) || anchor !== activeLinkPreviewElement) {
+      return;
+    }
+
+    activeLinkPreviewElement = null;
+    hideHoverHelp();
+  });
+}
+
+function shouldShowLinkPreview(anchor) {
+  const rawHref = String(anchor.getAttribute("href") || "").trim();
+  if (!rawHref) {
+    return false;
+  }
+
+  return !rawHref.toLowerCase().startsWith("javascript:");
+}
+
+function getLinkPreviewLabel(anchor) {
+  const rawHref = String(anchor.getAttribute("href") || "").trim();
+
+  if (rawHref.startsWith("#")) {
+    return "Section Link";
+  }
+
+  try {
+    const url = new URL(rawHref, window.location.href);
+    if (url.protocol === "mailto:") {
+      return "Email Link";
+    }
+    if (url.protocol === "tel:") {
+      return "Phone Link";
+    }
+    return url.origin === window.location.origin ? "Page Link" : "External Link";
+  } catch (error) {
+    return "Link Preview";
+  }
+}
+
+function getLinkPreviewMessage(anchor) {
+  const rawHref = String(anchor.getAttribute("href") || "").trim();
+
+  if (!rawHref) {
+    return "";
+  }
+
+  if (rawHref.startsWith("#")) {
+    return `${window.location.origin}${window.location.pathname}${rawHref}`;
+  }
+
+  try {
+    return new URL(rawHref, window.location.href).href;
+  } catch (error) {
+    return rawHref;
+  }
 }
 
 function initPasswordToggles() {
@@ -2612,7 +2781,11 @@ function cycleActionCenterTheme() {
     return;
   }
 
-  showHoverHelp(message);
+  showHoverHelp({
+    kind: "action",
+    label: "Theme Updated",
+    message
+  });
 }
 
 function getCurrentPageFileName() {

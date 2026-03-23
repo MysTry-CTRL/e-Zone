@@ -12,10 +12,12 @@ This project was originally built around local JSON storage, which does not work
 - Firebase Authentication for signup, login, logout, and session tracking
 - Social sign-in with Google, Apple, Microsoft, Facebook, and GitHub through Firebase Authentication
 - Branded social sign-in buttons with provider logos on the login and signup screens
+- Google, Apple, Microsoft, and GitHub sign-in buttons now use local SVG logo assets for cleaner rendering
 - Firestore-based storage for users, owner/admin records, books, and feedback
 - Dynamic book loading on the frontend
 - Feedback form that writes directly to Firestore
 - Restored animated footer quick links and social links across shared pages
+- Custom link-preview popup for hovered and focused links on desktop
 - Owner-only access for management pages such as dashboard, logs, uploads, and purchase links
 - User dashboard for normal authenticated users
 - Restored custom modal system for profile customization, popups, and owner dashboard actions
@@ -97,6 +99,7 @@ The site currently uses these main collections:
 - Profile customization preferences are stored locally in the browser so they persist across reloads
 - The action center is enhanced from the shared script so every page gets the same quick links, live stats, a dark/light-only theme toggle, and an identity badge with avatar plus role
 - Shared footer links are enhanced from the frontend script so hover animations and social link pills stay consistent across pages
+- Desktop links now show a custom in-page preview popup with the resolved link target when hovered or focused
 
 ## Authentication Notes
 
