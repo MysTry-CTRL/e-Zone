@@ -133,6 +133,17 @@ service cloud.firestore {
 }
 ```
 
+## Auth Troubleshooting
+
+If login shows `Firebase: Error (auth/configuration-not-found)`, check these Firebase Console settings:
+
+1. `Authentication > Sign-in method > Email/Password` must be enabled
+2. The Firebase web app config in `firebase.js` must belong to the same Firebase project
+3. Your local domain or deployed Vercel domain should be valid for the Firebase project setup
+4. If the owner email already exists in Firebase Authentication, make sure its password matches the current reserved owner password in the code
+
+If login shows `auth/unauthorized-domain`, add your site domain in Firebase Authentication settings before testing again.
+
 ## Run Locally
 
 This is a static site, so there is no build step and no backend server to start.
