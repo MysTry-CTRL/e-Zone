@@ -1,8 +1,15 @@
 import { auth, db, isFirebaseConfigured } from "./firebase.js";
 import {
   createUserWithEmailAndPassword,
+  FacebookAuthProvider,
+  getRedirectResult,
+  GoogleAuthProvider,
+  GithubAuthProvider,
   onAuthStateChanged,
+  OAuthProvider,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
@@ -25,6 +32,32 @@ const CATEGORY_ORDER = [
   "Science and Tech"
 ];
 
+const PAGE_LABELS = {
+  "index.html": "Home",
+  "books.html": "Books",
+  "book.html": "Book Detail",
+  "category.html": "Category",
+  "about.html": "About",
+  "contact.html": "Contact",
+  "signup.html": "Sign Up",
+  "login.html": "Login",
+  "feedback.html": "Feedback",
+  "dashboard.html": "Owner Dashboard",
+  "admin.html": "Upload Books",
+  "logs.html": "Logs",
+  "uploaded-books.html": "Uploaded Books",
+  "purchase-links.html": "Purchase Links",
+  "user-dashboard.html": "User Dashboard"
+};
+
+const SOCIAL_PROVIDER_LABELS = {
+  google: "Google",
+  apple: "Apple",
+  microsoft: "Microsoft",
+  facebook: "Facebook",
+  github: "GitHub"
+};
+
 const OWNER_ACCOUNT = {
   email: "abirxxdbrine2024@gmail.com",
   password: "#youtuber#69#",
@@ -34,7 +67,8 @@ const OWNER_ACCOUNT = {
 
 const STORAGE_KEYS = {
   profilePreferences: "ezone_profile_prefs_v1",
-  theme: "ezone_theme_v1"
+  theme: "ezone_theme_v1",
+  socialProvider: "ezone_social_provider_v1"
 };
 
 const state = {
@@ -75,6 +109,40 @@ function getUserRole(user = state.currentUser, profile = state.currentProfile) {
 
 function getPostLoginDestination(user = state.currentUser) {
   return isOwnerUser(user) ? "dashboard.html" : "user-dashboard.html";
+}
+
+function isAuthScreen() {
+  const page = getCurrentPageFileName();
+  return page === "login.html" || page === "signup.html";
+}
+
+function getAuthStatusElement() {
+  return document.getElementById("login-status") || document.getElementById("signup-status");
+}
+
+function rememberPendingSocialProvider(providerName) {
+  try {
+    window.sessionStorage.setItem(STORAGE_KEYS.socialProvider, String(providerName || ""));
+  } catch (error) {
+    console.warn("[e-Zone] Could not store pending social provider", error);
+  }
+}
+
+function readPendingSocialProvider() {
+  try {
+    return String(window.sessionStorage.getItem(STORAGE_KEYS.socialProvider) || "");
+  } catch (error) {
+    console.warn("[e-Zone] Could not read pending social provider", error);
+    return "";
+  }
+}
+
+function clearPendingSocialProvider() {
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEYS.socialProvider);
+  } catch (error) {
+    console.warn("[e-Zone] Could not clear pending social provider", error);
+  }
 }
 
 function shouldDisableModalUi() {
@@ -1042,6 +1110,153 @@ async function signInOrCreateOwnerAccount() {
   }
 }
 
+function createSocialProvider(providerName) {
+  const key = String(providerName || "").trim().toLowerCase();
+
+  if (key === "google") {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    return provider;
+  }
+
+  if (key === "apple") {
+    return new OAuthProvider("apple.com");
+  }
+
+  if (key === "microsoft") {
+    const provider = new OAuthProvider("microsoft.com");
+    provider.setCustomParameters({ prompt: "select_account" });
+    return provider;
+  }
+
+  if (key === "facebook") {
+    return new FacebookAuthProvider();
+  }
+
+  if (key === "github") {
+    const provider = new GithubAuthProvider();
+    provider.setCustomParameters({ allow_signup: "true" });
+    return provider;
+  }
+
+  throw new Error(`Unsupported social provider: ${providerName}`);
+}
+
+function getSocialProviderLabel(providerName) {
+  const key = String(providerName || "").trim().toLowerCase();
+  return SOCIAL_PROVIDER_LABELS[key] || "Provider";
+}
+
+function shouldUseRedirectForSocialAuth() {
+  return shouldDisableModalUi();
+}
+
+async function completeSocialSignIn(credential, providerName) {
+  const preferredName = String(credential?.user?.displayName || "").trim();
+  const profile = await syncCurrentUserProfile(credential.user, preferredName);
+  const status = getAuthStatusElement();
+  const providerLabel = getSocialProviderLabel(providerName);
+
+  setStatus(
+    status,
+    profile.syncError
+      ? `${providerLabel} sign-in succeeded. Firestore profile sync is pending, but your session is active.`
+      : `${providerLabel} sign-in successful. Redirecting...`,
+    false
+  );
+
+  clearPendingSocialProvider();
+  window.location.href = getPostLoginDestination(credential.user);
+}
+
+async function handleSocialSignIn(providerName) {
+  const providerKey = String(providerName || "").trim().toLowerCase();
+  const status = getAuthStatusElement();
+  const providerLabel = getSocialProviderLabel(providerKey);
+
+  if (!isFirebaseConfigured()) {
+    setStatus(status, "Update firebase.js with your Firebase project keys first.", true);
+    return;
+  }
+
+  if (!SOCIAL_PROVIDER_LABELS[providerKey]) {
+    setStatus(status, "That sign-in provider is not supported here.", true);
+    return;
+  }
+
+  setStatus(status, `Opening ${providerLabel} sign-in...`, false);
+
+  try {
+    const provider = createSocialProvider(providerKey);
+    rememberPendingSocialProvider(providerKey);
+
+    if (shouldUseRedirectForSocialAuth()) {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+
+    const credential = await signInWithPopup(auth, provider);
+    await completeSocialSignIn(credential, providerKey);
+  } catch (error) {
+    const code = String(error && typeof error === "object" && "code" in error ? error.code : "");
+
+    if (["auth/popup-blocked", "auth/popup-closed-by-user", "auth/cancelled-popup-request"].includes(code)) {
+      try {
+        const provider = createSocialProvider(providerKey);
+        setStatus(status, `${providerLabel} popup was not available. Redirecting instead...`, false);
+        rememberPendingSocialProvider(providerKey);
+        await signInWithRedirect(auth, provider);
+        return;
+      } catch (redirectError) {
+        console.error("[e-Zone] Social redirect sign-in failed", redirectError);
+        clearPendingSocialProvider();
+        setStatus(status, humanizeAuthError(redirectError), true);
+        return;
+      }
+    }
+
+    console.error("[e-Zone] Social sign-in failed", error);
+    clearPendingSocialProvider();
+    setStatus(status, humanizeAuthError(error), true);
+  }
+}
+
+async function handleSocialRedirectResult() {
+  if (!isFirebaseConfigured()) {
+    return;
+  }
+
+  try {
+    const result = await getRedirectResult(auth);
+    if (!result) {
+      return;
+    }
+
+    const rememberedProvider = readPendingSocialProvider();
+    const providerId = String(result.providerId || "");
+    const providerKey = rememberedProvider
+      || (
+        providerId === "google.com"
+          ? "google"
+          : providerId === "apple.com"
+            ? "apple"
+            : providerId === "microsoft.com"
+              ? "microsoft"
+              : providerId === "facebook.com"
+                ? "facebook"
+                : providerId === "github.com"
+                  ? "github"
+                  : ""
+      );
+
+    await completeSocialSignIn(result, providerKey);
+  } catch (error) {
+    console.error("[e-Zone] Social redirect result failed", error);
+    clearPendingSocialProvider();
+    setStatus(getAuthStatusElement(), humanizeAuthError(error), true);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   void initApp();
 });
@@ -1054,9 +1269,11 @@ async function initApp() {
   initPasswordToggles();
   loadUiPreferences();
   initCustomModals();
+  initActionCenterUpgrade();
   bindGlobalActions();
   bindSignupForm();
   bindLoginForm();
+  bindSocialAuthButtons();
   bindContactForm();
   bindBookFilters();
   bindFeedbackPage();
@@ -1073,6 +1290,7 @@ async function initApp() {
   }
 
   void loadBooks();
+  await handleSocialRedirectResult();
 
   onAuthStateChanged(auth, async (user) => {
     state.authResolved = true;
@@ -1362,6 +1580,21 @@ function bindLoginForm() {
       console.error("[e-Zone] Login failed", error);
       setStatus(status, humanizeAuthError(error), true);
     }
+  });
+}
+
+function bindSocialAuthButtons() {
+  document.querySelectorAll("[data-social-login]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement) || button.dataset.bound === "1") {
+      return;
+    }
+
+    button.dataset.bound = "1";
+
+    button.addEventListener("click", async () => {
+      const providerName = String(button.getAttribute("data-social-login") || "");
+      await handleSocialSignIn(providerName);
+    });
   });
 }
 
@@ -1897,6 +2130,411 @@ async function deleteBookById(bookId) {
   await loadBooks();
 }
 
+function initActionCenterUpgrade() {
+  if (document.body.dataset.actionCenterBound === "1") {
+    return;
+  }
+
+  document.body.dataset.actionCenterBound = "1";
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const themeToggle = target.closest("[data-theme-pill-toggle]");
+    if (themeToggle) {
+      event.preventDefault();
+      cycleActionCenterTheme();
+    }
+  });
+
+  try {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const rerender = () => {
+      if (!String(state.uiPreferences?.theme || "")) {
+        renderActionCenterUpgrade();
+      }
+    };
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", rerender);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(rerender);
+    }
+  } catch (error) {
+    console.warn("[e-Zone] Could not bind system theme listener", error);
+  }
+}
+
+function renderActionCenterUpgrade() {
+  ensureActionCenterUpgradeMarkup();
+  renderActionCenterThemePill();
+  renderActionCenterSection();
+}
+
+function ensureActionCenterUpgradeMarkup() {
+  document.querySelectorAll(".control-center").forEach((root) => {
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    let host = root.querySelector("[data-theme-pill-host]");
+    if (!(host instanceof HTMLElement)) {
+      host = document.createElement("div");
+      host.setAttribute("data-theme-pill-host", "");
+      root.append(host);
+    }
+  });
+
+  document.querySelectorAll("[data-user-menu]").forEach((menu) => {
+    if (!(menu instanceof HTMLElement) || menu.querySelector("[data-action-center-upgrade]")) {
+      return;
+    }
+
+    const reference = menu.querySelector("[data-user-dashboard], [data-admin-dashboard]");
+    const template = document.createElement("template");
+    template.innerHTML = buildActionCenterSectionMarkup().trim();
+    const nextSection = template.content.firstElementChild;
+
+    if (!nextSection) {
+      return;
+    }
+
+    if (reference) {
+      menu.insertBefore(nextSection, reference);
+      return;
+    }
+
+    menu.append(nextSection);
+  });
+}
+
+function renderActionCenterThemePill() {
+  const resolvedTheme = getResolvedThemeMode();
+  const storedTheme = String(state.uiPreferences?.theme || "");
+  const label = storedTheme ? capitalizeLabel(storedTheme) : "Auto";
+  const ariaLabel = storedTheme
+    ? `Theme is set to ${label}. Click to cycle theme mode.`
+    : `Theme follows your device. Click to cycle theme mode.`;
+
+  document.querySelectorAll("[data-theme-pill-host]").forEach((host) => {
+    if (!(host instanceof HTMLElement)) {
+      return;
+    }
+
+    host.innerHTML = `
+      <button
+        class="theme-toggle-pill is-${escapeHtml(resolvedTheme)}"
+        type="button"
+        data-theme-pill-toggle
+        aria-label="${escapeHtml(ariaLabel)}"
+        title="${escapeHtml(ariaLabel)}"
+      >
+        <span class="theme-pill-track" aria-hidden="true">
+          <span class="theme-pill-icon sun">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.2"></circle>
+              <path d="M12 2.5v2.3M12 19.2v2.3M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.3M19.2 12h2.3M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"></path>
+            </svg>
+          </span>
+          <span class="theme-pill-icon moon">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M20 14.4A8.5 8.5 0 0 1 9.6 4a8.7 8.7 0 1 0 10.4 10.4Z"></path>
+            </svg>
+          </span>
+          <span class="theme-pill-knob"></span>
+        </span>
+        <span class="theme-pill-label">${escapeHtml(label)}</span>
+      </button>
+    `;
+  });
+}
+
+function renderActionCenterSection() {
+  const isLoggedIn = Boolean(state.currentUser);
+  const isOwner = isOwnerUser();
+  const myFeedback = isLoggedIn
+    ? state.feedback.filter((item) => normalizeEmail(item.userEmail) === normalizeEmail(state.currentUser?.email || ""))
+    : [];
+  const feedbackCount = isOwner ? state.feedback.length : myFeedback.length;
+  const feedbackLabel = isOwner ? "Queue" : isLoggedIn ? "My Notes" : "Access";
+  const feedbackValue = isLoggedIn ? String(feedbackCount) : "Locked";
+  const sessionLabel = isOwner ? "Owner Live" : isLoggedIn ? "Member Live" : "Guest";
+  const pageLabel = getCurrentPageLabel();
+  const note = isOwner
+    ? "Owner shortcuts, queue visibility, and live page context are ready here."
+    : isLoggedIn
+      ? "Quick links, session context, and Firebase-backed status live in one place."
+      : "Sign in to unlock the full action center and account-linked tools.";
+  const activityItems = getActionCenterActivityItems(isOwner, isLoggedIn, myFeedback, pageLabel);
+
+  document.querySelectorAll("[data-action-center-upgrade]").forEach((section) => {
+    if (!(section instanceof HTMLElement)) {
+      return;
+    }
+
+    section.classList.toggle("is-owner", isOwner);
+    section.classList.toggle("is-member", isLoggedIn && !isOwner);
+    section.classList.toggle("is-guest", !isLoggedIn);
+  });
+
+  setManyTexts("[data-action-center-note]", note);
+  setManyTexts("[data-action-center-page]", pageLabel);
+  setManyTexts("[data-action-center-books]", state.booksLoaded ? String(state.books.length) : "--");
+  setManyTexts("[data-action-center-feedback-label]", feedbackLabel);
+  setManyTexts("[data-action-center-feedback]", feedbackValue);
+
+  document.querySelectorAll("[data-action-center-session]").forEach((chip) => {
+    if (!(chip instanceof HTMLElement)) {
+      return;
+    }
+
+    chip.textContent = sessionLabel;
+    chip.classList.remove("is-owner", "is-member", "is-guest");
+    chip.classList.add(isOwner ? "is-owner" : isLoggedIn ? "is-member" : "is-guest");
+  });
+
+  document.querySelectorAll("[data-action-center-links]").forEach((root) => {
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    root.innerHTML = buildActionCenterLinks();
+  });
+
+  document.querySelectorAll("[data-action-center-log]").forEach((root) => {
+    if (!(root instanceof HTMLElement)) {
+      return;
+    }
+
+    root.innerHTML = activityItems.map((item) => `
+      <div class="menu-log-item">
+        <span>${escapeHtml(item.title)}</span>
+        ${escapeHtml(item.body)}
+      </div>
+    `).join("");
+  });
+}
+
+function buildActionCenterSectionMarkup() {
+  return `
+    <section class="user-menu-section action-center-upgrade" data-action-center-upgrade>
+      <div class="action-center-head">
+        <div>
+          <h4>Action Center</h4>
+          <p class="control-center-note" data-action-center-note>Quick links and live status will appear here.</p>
+        </div>
+        <span class="action-center-chip" data-action-center-session>Guest</span>
+      </div>
+      <div class="action-center-grid" data-action-center-links></div>
+      <div class="action-center-stats">
+        <article class="action-center-mini-stat">
+          <span>Current Page</span>
+          <strong data-action-center-page>Home</strong>
+        </article>
+        <article class="action-center-mini-stat">
+          <span>Library</span>
+          <strong data-action-center-books>--</strong>
+        </article>
+        <article class="action-center-mini-stat">
+          <span data-action-center-feedback-label>Access</span>
+          <strong data-action-center-feedback>Locked</strong>
+        </article>
+      </div>
+      <div class="menu-log action-center-log" data-action-center-log></div>
+    </section>
+  `;
+}
+
+function buildActionCenterLinks() {
+  const currentFile = getCurrentPageFileName();
+  const links = getActionCenterLinks();
+
+  return links.map((item) => {
+    const targetFile = getFileNameFromHref(item.href);
+    const currentClass = targetFile === currentFile ? " is-current" : "";
+
+    return `
+      <a class="action-center-card${currentClass}" href="${escapeHtml(item.href)}">
+        <strong>${escapeHtml(item.label)}</strong>
+        <span>${escapeHtml(item.note)}</span>
+      </a>
+    `;
+  }).join("");
+}
+
+function getActionCenterLinks() {
+  if (isOwnerUser()) {
+    return [
+      { href: "dashboard.html", label: "Dashboard", note: "Open the owner command board." },
+      { href: "admin.html", label: "Upload Books", note: "Publish or update the library." },
+      { href: "logs.html", label: "Logs", note: "Review users and feedback flow." },
+      { href: "purchase-links.html", label: "Links", note: "Check live purchase destinations." }
+    ];
+  }
+
+  if (state.currentUser) {
+    return [
+      { href: "user-dashboard.html", label: "My Dashboard", note: "Open your account activity view." },
+      { href: "books.html", label: "Browse Books", note: "Jump into the live Firestore library." },
+      { href: "feedback.html", label: "Feedback", note: "Send bugs or suggestions quickly." },
+      { href: "contact.html", label: "Contact", note: "Reach support without leaving the site." }
+    ];
+  }
+
+  return [
+    { href: "login.html", label: "Login", note: "Sign in to unlock account tools." },
+    { href: "signup.html", label: "Create Account", note: "Register a new Firebase-backed user." },
+    { href: "books.html", label: "Browse Books", note: "Explore the public catalog first." },
+    { href: "contact.html", label: "Contact", note: "Send a support message anytime." }
+  ];
+}
+
+function getActionCenterActivityItems(isOwner, isLoggedIn, myFeedback, pageLabel) {
+  const items = [];
+
+  items.push({
+    title: "Now Viewing",
+    body: `You are currently on ${pageLabel}.`
+  });
+
+  if (!isFirebaseConfigured()) {
+    items.push({
+      title: "Firebase Setup",
+      body: "Add your Firebase web app config in firebase.js to finish live sync."
+    });
+    return items;
+  }
+
+  if (!state.booksLoaded) {
+    items.push({
+      title: "Library Sync",
+      body: "Books are loading from Firestore right now."
+    });
+  } else if (state.booksError) {
+    items.push({
+      title: "Library Sync",
+      body: state.booksError
+    });
+  } else if (state.books[0]) {
+    items.push({
+      title: "Latest Book",
+      body: `${state.books[0].title} is live in ${state.books[0].category}.`
+    });
+  } else {
+    items.push({
+      title: "Library",
+      body: "No books are published yet."
+    });
+  }
+
+  if (isOwner) {
+    if (!state.feedbackLoaded) {
+      items.push({
+        title: "Feedback Queue",
+        body: "Owner feedback entries are syncing now."
+      });
+    } else if (state.feedbackError) {
+      items.push({
+        title: "Feedback Queue",
+        body: state.feedbackError
+      });
+    } else if (state.feedback[0]) {
+      items.push({
+        title: "Feedback Queue",
+        body: `${state.feedback.length} entries stored. Latest: ${truncateText(state.feedback[0].message, 74)}`
+      });
+    } else {
+      items.push({
+        title: "Feedback Queue",
+        body: "No feedback has been submitted yet."
+      });
+    }
+  } else if (isLoggedIn) {
+    if (!state.feedbackLoaded) {
+      items.push({
+        title: "Your Activity",
+        body: "Your feedback timeline is syncing."
+      });
+    } else if (myFeedback[0]) {
+      items.push({
+        title: "Your Activity",
+        body: `${myFeedback.length} messages saved. Latest: ${truncateText(myFeedback[0].message, 74)}`
+      });
+    } else {
+      items.push({
+        title: "Your Activity",
+        body: "Send your first feedback to start your timeline."
+      });
+    }
+  } else {
+    items.push({
+      title: "Session",
+      body: "Login or create an account to open personalized tools."
+    });
+  }
+
+  return items.slice(0, 4);
+}
+
+function getResolvedThemeMode() {
+  const preferred = String(state.uiPreferences?.theme || "");
+  if (preferred === "light" || preferred === "dark") {
+    return preferred;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function cycleActionCenterTheme() {
+  const current = String(state.uiPreferences?.theme || "");
+  const next = !current ? "dark" : current === "dark" ? "light" : "";
+
+  state.uiPreferences = normalizeUiPreferences({
+    ...state.uiPreferences,
+    theme: next
+  });
+  persistUiPreferences();
+  updateProfileCustomizeModal();
+  renderActionCenterUpgrade();
+
+  const message = next
+    ? `${capitalizeLabel(next)} theme enabled.`
+    : "Theme set back to system default.";
+
+  if (shouldDisableModalUi()) {
+    showMobileInlineNotice(message, false);
+    return;
+  }
+
+  showHoverHelp(message);
+}
+
+function getCurrentPageFileName() {
+  const raw = String(window.location.pathname || "").split("/").pop() || "index.html";
+  return raw.toLowerCase();
+}
+
+function getCurrentPageLabel() {
+  const fileName = getCurrentPageFileName();
+  return PAGE_LABELS[fileName] || capitalizeLabel(fileName.replace(".html", "")) || "Current Page";
+}
+
+function getFileNameFromHref(href) {
+  return String(href || "").split("/").pop().toLowerCase();
+}
+
+function capitalizeLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function renderAllPages() {
   syncAuthUi();
   renderHomeCategories();
@@ -1913,6 +2551,7 @@ function renderAllPages() {
   renderAdminPage();
   renderCommonMenuStats();
   renderRestoredModals();
+  renderActionCenterUpgrade();
 }
 
 function syncAuthUi() {
@@ -3167,13 +3806,20 @@ function humanizeAuthError(error) {
     "auth/email-already-in-use": "That email is already registered.",
     "auth/invalid-email": "Please enter a valid email address.",
     "auth/invalid-credential": "Incorrect email or password.",
+    "auth/account-exists-with-different-credential": "An account already exists with this email using a different sign-in method. Use your original provider or link the account in Firebase.",
+    "auth/popup-blocked": "Your browser blocked the sign-in popup. Try again and allow popups, or use the redirect flow on mobile.",
+    "auth/popup-closed-by-user": "The sign-in popup was closed before login finished.",
+    "auth/cancelled-popup-request": "A sign-in popup was interrupted by another auth request. Please try again.",
     "auth/owner-account-mismatch": "This reserved owner email already exists in Firebase with a different password. Update it in the Firebase console to #youtuber#69# if you want this exact owner login to work.",
     "auth/configuration-not-found": "Firebase Authentication is not fully configured for this project. In Firebase Console, enable Email/Password sign-in and verify the app/auth setup for this site.",
     "auth/missing-password": "Password is required.",
     "auth/operation-not-allowed": "Email/password login is not enabled in Firebase Authentication yet.",
+    "auth/operation-not-supported-in-this-environment": "This browser environment does not support popup auth cleanly. Try again on a normal browser window or use the redirect flow.",
     "auth/app-not-authorized": "This site is not authorized to use the current Firebase project. Check your Firebase web app config and authorized setup.",
     "auth/unauthorized-domain": "This domain is not authorized in Firebase Authentication. Add your local or Vercel domain in Firebase Console under Authentication settings.",
     "auth/invalid-api-key": "The Firebase API key or web app config is invalid for this project.",
+    "auth/invalid-oauth-provider": "That OAuth provider is not configured correctly in Firebase Authentication.",
+    "auth/missing-or-invalid-nonce": "Apple sign-in needs a valid provider setup. Recheck the Apple provider configuration in Firebase.",
     "permission-denied": "Firestore denied access while finishing login. Check your Firebase rules for users and admins.",
     "auth/weak-password": "Password is too weak. Use at least 8 characters.",
     "auth/network-request-failed": "Network error. Check your internet connection and try again.",

@@ -10,6 +10,7 @@ This project was originally built around local JSON storage, which does not work
 
 - Static website with no Express or Node backend
 - Firebase Authentication for signup, login, logout, and session tracking
+- Social sign-in with Google, Apple, Microsoft, Facebook, and GitHub through Firebase Authentication
 - Firestore-based storage for users, owner/admin records, books, and feedback
 - Dynamic book loading on the frontend
 - Feedback form that writes directly to Firestore
@@ -18,6 +19,7 @@ This project was originally built around local JSON storage, which does not work
 - Restored custom modal system for profile customization, popups, and owner dashboard actions
 - Mobile-safe fallback behavior that disables blocking custom pop-up modals on mobile browsers
 - Local profile preferences such as theme, avatar preview, privacy toggles, and reduced motion
+- Upgraded action center with a shared theme toggle, quick links, live page context, and account status cards
 - Vercel-friendly architecture with persistent cloud data storage
 
 ## Tech Stack
@@ -91,21 +93,25 @@ The site currently uses these main collections:
 - The restored custom modal system is injected and managed from the shared frontend script
 - On mobile browsers, blocking custom modal popups are replaced with inline notices or normal page navigation
 - Profile customization preferences are stored locally in the browser so they persist across reloads
+- The action center is enhanced from the shared script so every page gets the same quick links, live stats, and theme controls
 
 ## Authentication Notes
 
 - Normal users register through `signup.html`
 - The reserved owner account signs in directly through `login.html`
 - Owner registration is blocked from the public signup form
+- Login and signup screens also support Google, Apple, Microsoft, Facebook, and GitHub sign-in
 - If Firestore profile syncing fails after authentication, the session can still continue with a local fallback profile
 
 ## Firebase Setup
 
 1. Create a Firebase project.
 2. Enable `Authentication > Sign-in method > Email/Password`.
-3. Create a Firestore database.
-4. Open `firebase.js` and replace the config values if you are using your own Firebase project.
-5. Add Firestore rules that allow public book reads and authenticated writes as needed.
+3. Enable the providers you want to use in Firebase Authentication, including Google, Apple, Microsoft, Facebook, and GitHub if you want social sign-in.
+4. Make sure your local and deployed domains are authorized in Firebase Authentication settings.
+5. Create a Firestore database.
+6. Open `firebase.js` and replace the config values if you are using your own Firebase project.
+7. Add Firestore rules that allow public book reads and authenticated writes as needed.
 
 Example starter rules:
 
@@ -144,6 +150,8 @@ If login shows `Firebase: Error (auth/configuration-not-found)`, check these Fir
 
 If login shows `auth/unauthorized-domain`, add your site domain in Firebase Authentication settings before testing again.
 
+If Google, Apple, or Microsoft sign-in fails, verify that the provider is enabled in Firebase Authentication and that its redirect/domain configuration is complete for your local and deployed URLs.
+
 ## Run Locally
 
 This is a static site, so there is no build step and no backend server to start.
@@ -166,7 +174,7 @@ No custom Node server is required.
 ## Documentation
 
 - `README.md` should be updated whenever major features, authentication flows, UI systems, or deployment behavior change
-- This repository now documents the Firebase migration, owner-only access flow, and restored custom modal system
+- This repository now documents the Firebase migration, owner-only access flow, restored custom modal system, and upgraded action center
 
 ## Important Security Note
 

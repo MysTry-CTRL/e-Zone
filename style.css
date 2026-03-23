@@ -1514,6 +1514,44 @@ h6,
   color: #4a5d8e;
 }
 
+.auth-divider {
+  position: relative;
+  margin: 1rem 0 0.95rem;
+  text-align: center;
+}
+
+.auth-divider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--line);
+  transform: translateY(-50%);
+}
+
+.auth-divider span {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.7rem;
+  background: var(--surface-strong);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.social-auth-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.social-auth-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 46px;
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -2756,6 +2794,124 @@ body.admin-mode .role-badge {
   color: var(--ink-soft);
 }
 
+.action-center-upgrade {
+  gap: 14px;
+}
+
+.action-center-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.action-center-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.action-center-chip.is-owner {
+  border-color: color-mix(in srgb, #ffd966 70%, transparent);
+  background: color-mix(in srgb, #ffd966 22%, transparent);
+}
+
+.action-center-chip.is-member {
+  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.action-center-chip.is-guest {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
+}
+
+.action-center-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-center-card {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 84%, transparent), color-mix(in srgb, var(--surface-muted) 94%, transparent));
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.action-center-card:hover,
+.action-center-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-pop);
+}
+
+.action-center-card.is-current {
+  border-color: color-mix(in srgb, var(--primary) 74%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent), var(--shadow-pop);
+}
+
+.action-center-card strong {
+  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.action-center-card span {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.action-center-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-center-mini-stat {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-muted) 92%, transparent);
+}
+
+.action-center-mini-stat span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.action-center-mini-stat strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.action-center-log {
+  max-height: 210px;
+}
+
 .menu-focus-flash {
   animation: menuFocusFlash 0.7s ease;
 }
@@ -3406,6 +3562,14 @@ body.reduce-motion .scroll-animate-ready.in-view {
     justify-content: flex-start;
   }
 
+  .theme-pill-label {
+    display: none;
+  }
+
+  .theme-toggle-pill {
+    padding-right: 0.32rem;
+  }
+
   .profile-email {
     max-width: 100%;
   }
@@ -3467,6 +3631,11 @@ body.reduce-motion .scroll-animate-ready.in-view {
     display: none;
   }
 
+  .control-center {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .main-nav {
     gap: 0.38rem;
     width: 100%;
@@ -3493,6 +3662,16 @@ body.reduce-motion .scroll-animate-ready.in-view {
 
   .theme-toggle-pill {
     flex: 0 0 auto;
+  }
+
+  .action-center-grid,
+  .action-center-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .action-center-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .discovery-grid {
