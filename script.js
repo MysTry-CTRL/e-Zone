@@ -486,6 +486,423 @@ function showMobileInlineNotice({
   }, 4200);
 }
 
+function isPortraitOrientation() {
+  return window.matchMedia("(orientation: portrait)").matches;
+}
+
+function isLandscapeOrientation() {
+  return window.matchMedia("(orientation: landscape)").matches;
+}
+
+function isExplicitMobileOrTabletUserAgent() {
+  const userAgent = String(window.navigator.userAgent || "");
+  const platform = String(window.navigator.userAgentData?.platform || window.navigator.platform || "");
+  const isIpadOsDesktopAgent = /mac/i.test(platform) && Number(window.navigator.maxTouchPoints || 0) > 1;
+  return /android|iphone|ipad|ipod|mobile|tablet|kindle|silk|playbook/i.test(userAgent) || isIpadOsDesktopAgent;
+}
+
+function isDesktopClassPlatform() {
+  const userAgent = String(window.navigator.userAgent || "");
+  const platform = String(window.navigator.userAgentData?.platform || window.navigator.platform || "");
+  return /win|mac|linux|x11|cros/i.test(platform) || /\bwindows nt\b|\bmacintosh\b|\bx11\b|\bcros\b|\blinux x86_64\b/i.test(userAgent);
+}
+
+function isTouchResponsiveDevice() {
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const finePointer = window.matchMedia("(pointer: fine)").matches;
+  const touchEnabled = "ontouchstart" in window || Number(window.navigator.maxTouchPoints || 0) > 0;
+
+  if (isExplicitMobileOrTabletUserAgent()) {
+    return true;
+  }
+
+  if (isDesktopClassPlatform()) {
+    return false;
+  }
+
+  return coarsePointer || (touchEnabled && !finePointer);
+}
+
+function getTouchViewportShortSide() {
+  const screenWidth = Number(window.screen?.width || 0);
+  const screenHeight = Number(window.screen?.height || 0);
+  if (screenWidth > 0 && screenHeight > 0) {
+    return Math.min(screenWidth, screenHeight);
+  }
+
+  const values = [
+    Number(window.innerWidth || 0),
+    Number(window.innerHeight || 0)
+  ].filter((value) => Number.isFinite(value) && value > 0);
+
+  return values.length ? Math.min(...values) : 0;
+}
+
+function getTouchViewportLongSide() {
+  const screenWidth = Number(window.screen?.width || 0);
+  const screenHeight = Number(window.screen?.height || 0);
+  if (screenWidth > 0 && screenHeight > 0) {
+    return Math.max(screenWidth, screenHeight);
+  }
+
+  const values = [
+    Number(window.innerWidth || 0),
+    Number(window.innerHeight || 0)
+  ].filter((value) => Number.isFinite(value) && value > 0);
+
+  return values.length ? Math.max(...values) : 0;
+}
+
+function getTouchLayoutProfile() {
+  if (!isTouchResponsiveDevice()) {
+    return "desktop";
+  }
+
+  const shortSide = getTouchViewportShortSide();
+  const longSide = getTouchViewportLongSide();
+
+  if (shortSide <= 760) {
+    return "phone";
+  }
+
+  if (shortSide >= 834 && shortSide <= 1100 && longSide >= 1100) {
+    return "tablet-large";
+  }
+
+  if (shortSide >= 600 && shortSide <= 920 && longSide >= 900) {
+    return "tablet-compact";
+  }
+
+  return "desktop";
+}
+
+function shouldUseCompactHeader() {
+  const profile = getTouchLayoutProfile();
+
+  if (profile === "phone") {
+    return isPortraitOrientation();
+  }
+
+  if (profile === "tablet-compact") {
+    return true;
+  }
+
+  if (profile === "tablet-large") {
+    return isPortraitOrientation();
+  }
+
+  return false;
+}
+
+function shouldLockPhoneLandscape() {
+  return getTouchLayoutProfile() === "phone" && isLandscapeOrientation();
+}
+
+function initMobileBrandMenu() {
+  ensureMobileBrandMenuShell();
+  ensureMobileBrandMenuTrigger();
+  updateMobileHeaderMode();
+
+  if (!(document.body instanceof HTMLElement) || document.body.dataset.mobileBrandMenuBound === "1") {
+    return;
+  }
+
+  document.body.dataset.mobileBrandMenuBound = "1";
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    if (target.closest("[data-mobile-brand-toggle]")) {
+      event.preventDefault();
+      toggleMobileBrandMenu();
+      return;
+    }
+
+    if (target.closest("[data-mobile-nav-overlay], [data-mobile-nav-close]")) {
+      event.preventDefault();
+      closeMobileBrandMenu();
+      return;
+    }
+
+    if (target.closest("[data-mobile-nav-link]")) {
+      closeMobileBrandMenu();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeMobileBrandMenu();
+    }
+  });
+
+  window.addEventListener("resize", updateMobileHeaderMode, { passive: true });
+  window.addEventListener("orientationchange", updateMobileHeaderMode);
+}
+
+function ensureMobileBrandMenuShell() {
+  if (!(document.body instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!document.querySelector("[data-mobile-nav-overlay]")) {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `
+        <div class="mobile-nav-overlay" data-mobile-nav-overlay aria-hidden="true"></div>
+        <aside class="mobile-nav-drawer glass" data-mobile-nav-drawer aria-hidden="true" aria-label="Compact navigation drawer">
+          <div class="mobile-nav-head">
+            <div class="mobile-nav-copy">
+              <p class="section-label">Quick Menu</p>
+              <h3>Explore e-Zone</h3>
+              <p class="control-center-note" data-mobile-nav-note>Topbar links are mirrored here for compact touch layouts.</p>
+            </div>
+            <button class="menu-close" type="button" data-mobile-nav-close aria-label="Close compact menu">&times;</button>
+          </div>
+          <nav class="mobile-nav-links" data-mobile-nav-links aria-label="Compact navigation links"></nav>
+        </aside>
+        <div class="mobile-orientation-lock" data-mobile-orientation-lock aria-hidden="true">
+          <div class="mobile-orientation-lock-card glass">
+            <span class="brand-icon mobile-orientation-lock-icon" aria-hidden="true"></span>
+            <p class="section-label">Phone Portrait Only</p>
+            <h3>Rotate your phone back upright</h3>
+            <p class="info-text">e-Zone keeps phone browsing in portrait mode only, so this layout pauses in landscape.</p>
+          </div>
+        </div>
+      `
+    );
+  }
+}
+
+function ensureMobileBrandMenuTrigger() {
+  const header = document.querySelector(".site-header .nav-shell");
+  const brand = document.querySelector(".site-header .brand");
+
+  if (!(header instanceof HTMLElement) || !(brand instanceof HTMLElement)) {
+    return;
+  }
+
+  brand.classList.add("brand-home-link");
+
+  let button = header.querySelector("[data-mobile-brand-toggle]");
+  if (!(button instanceof HTMLButtonElement)) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = "mobile-brand-toggle";
+    button.setAttribute("data-mobile-brand-toggle", "");
+    button.setAttribute("aria-controls", "ezone-mobile-nav");
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-label", "Open navigation menu");
+    button.title = "Open navigation menu";
+    button.innerHTML = `<span class="brand-icon" aria-hidden="true"></span>`;
+    header.insertBefore(button, brand);
+  }
+
+  const drawer = document.querySelector("[data-mobile-nav-drawer]");
+  if (drawer instanceof HTMLElement) {
+    drawer.id = "ezone-mobile-nav";
+  }
+}
+
+function updateMobileHeaderMode() {
+  ensureMobileBrandMenuShell();
+  ensureMobileBrandMenuTrigger();
+  renderMobileBrandMenu();
+
+  if (!(document.body instanceof HTMLElement)) {
+    return;
+  }
+
+  const layoutProfile = getTouchLayoutProfile();
+  const useCompactHeader = shouldUseCompactHeader();
+  const lockPhoneLandscape = shouldLockPhoneLandscape();
+
+  document.body.classList.toggle("use-compact-header", useCompactHeader);
+  document.body.classList.toggle("lock-phone-landscape", lockPhoneLandscape);
+  document.body.classList.toggle("device-phone", layoutProfile === "phone");
+  document.body.classList.toggle("device-tablet-compact", layoutProfile === "tablet-compact");
+  document.body.classList.toggle("device-tablet-large", layoutProfile === "tablet-large");
+  document.body.dataset.touchLayoutProfile = layoutProfile;
+
+  const lock = document.querySelector("[data-mobile-orientation-lock]");
+  if (lock instanceof HTMLElement) {
+    lock.classList.toggle("open", lockPhoneLandscape);
+    lock.setAttribute("aria-hidden", lockPhoneLandscape ? "false" : "true");
+  }
+
+  if (!useCompactHeader) {
+    closeMobileBrandMenu();
+  }
+}
+
+function renderMobileBrandMenu() {
+  ensureMobileBrandMenuShell();
+  ensureMobileBrandMenuTrigger();
+
+  const linksRoot = document.querySelector("[data-mobile-nav-links]");
+  const note = document.querySelector("[data-mobile-nav-note]");
+
+  if (!(linksRoot instanceof HTMLElement)) {
+    return;
+  }
+
+  const links = getMobileBrandMenuLinks();
+  const currentFile = getCurrentPageFileName();
+  const currentLabel = getCurrentPageLabel();
+  const layoutProfile = getTouchLayoutProfile();
+
+  if (note instanceof HTMLElement) {
+    if (layoutProfile === "tablet-compact") {
+      note.textContent = `Viewing ${currentLabel}. This compact tablet menu stays active in both portrait and landscape.`;
+    } else if (layoutProfile === "tablet-large") {
+      note.textContent = `Viewing ${currentLabel}. This larger-tablet menu stays compact in portrait and returns to the full desktop header in landscape.`;
+    } else {
+      note.textContent = `Viewing ${currentLabel}. On phones, this compact menu stays active in portrait mode.`;
+    }
+  }
+
+  linksRoot.innerHTML = links.length
+    ? links.map((item) => {
+      const targetFile = getFileNameFromHref(item.href);
+      const isCurrent = targetFile === currentFile;
+
+      return `
+        <a class="mobile-nav-link${isCurrent ? " is-current" : ""}" href="${escapeHtml(item.href)}" data-mobile-nav-link>
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(isCurrent ? "Current page" : item.note)}</span>
+        </a>
+      `;
+    }).join("")
+    : `
+      <article class="soft-panel mobile-nav-empty">
+        <p class="info-text">No topbar links are available here right now.</p>
+      </article>
+    `;
+}
+
+function getMobileBrandMenuLinks() {
+  const anchors = [
+    ...Array.from(document.querySelectorAll(".main-nav a")),
+    ...Array.from(document.querySelectorAll(".control-center a")).filter((link) => {
+      return link instanceof HTMLAnchorElement && !link.classList.contains("hidden");
+    })
+  ];
+  const seen = new Set();
+
+  return anchors.reduce((items, link) => {
+    if (!(link instanceof HTMLAnchorElement)) {
+      return items;
+    }
+
+    const href = String(link.getAttribute("href") || "").trim();
+    const label = String(link.textContent || "").trim();
+
+    if (!href || !label) {
+      return items;
+    }
+
+    const key = `${getFileNameFromHref(href)}::${label.toLowerCase()}`;
+    if (seen.has(key)) {
+      return items;
+    }
+
+    seen.add(key);
+    items.push({
+      href,
+      label,
+      note: getMobileBrandMenuLinkNote(label)
+    });
+    return items;
+  }, []);
+}
+
+function getMobileBrandMenuLinkNote(label) {
+  const normalized = String(label || "").trim().toLowerCase();
+
+  if (normalized === "home") {
+    return "Return to the homepage.";
+  }
+
+  if (normalized === "books") {
+    return "Browse the live book collection.";
+  }
+
+  if (normalized === "about") {
+    return "Read more about e-Zone.";
+  }
+
+  if (normalized === "contact") {
+    return "Reach support and contact options.";
+  }
+
+  if (normalized === "login") {
+    return "Sign in to your account.";
+  }
+
+  if (normalized === "sign up") {
+    return "Create a new account.";
+  }
+
+  return `Open ${label}.`;
+}
+
+function toggleMobileBrandMenu() {
+  const drawer = document.querySelector("[data-mobile-nav-drawer]");
+  if (!(drawer instanceof HTMLElement) || !shouldUseCompactHeader()) {
+    return;
+  }
+
+  if (drawer.classList.contains("open")) {
+    closeMobileBrandMenu();
+    return;
+  }
+
+  openMobileBrandMenu();
+}
+
+function openMobileBrandMenu() {
+  if (!shouldUseCompactHeader()) {
+    return;
+  }
+
+  const overlay = document.querySelector("[data-mobile-nav-overlay]");
+  const drawer = document.querySelector("[data-mobile-nav-drawer]");
+  const trigger = document.querySelector("[data-mobile-brand-toggle]");
+
+  if (!(overlay instanceof HTMLElement) || !(drawer instanceof HTMLElement)) {
+    return;
+  }
+
+  closeUserMenu();
+  document.body.classList.add("mobile-brand-menu-open");
+  overlay.classList.add("open");
+  drawer.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  drawer.setAttribute("aria-hidden", "false");
+
+  if (trigger instanceof HTMLButtonElement) {
+    trigger.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeMobileBrandMenu() {
+  const overlay = document.querySelector("[data-mobile-nav-overlay]");
+  const drawer = document.querySelector("[data-mobile-nav-drawer]");
+  const trigger = document.querySelector("[data-mobile-brand-toggle]");
+
+  overlay?.classList.remove("open");
+  drawer?.classList.remove("open");
+  overlay?.setAttribute("aria-hidden", "true");
+  drawer?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("mobile-brand-menu-open");
+
+  if (trigger instanceof HTMLButtonElement) {
+    trigger.setAttribute("aria-expanded", "false");
+  }
+}
+
 function initCustomModals() {
   ensureGlobalUiShells();
 
@@ -1288,6 +1705,7 @@ async function initApp() {
   initCustomModals();
   initLinkPreviewPopups();
   initActionCenterUpgrade();
+  initMobileBrandMenu();
   bindGlobalActions();
   bindSignupForm();
   bindLoginForm();
@@ -2777,7 +3195,10 @@ function cycleActionCenterTheme() {
   const message = `${capitalizeLabel(next)} theme enabled.`;
 
   if (shouldDisableModalUi()) {
-    showMobileInlineNotice(message, false);
+    showMobileInlineNotice({
+      label: "Theme Updated",
+      message
+    });
     return;
   }
 
@@ -2828,6 +3249,7 @@ function renderAllPages() {
   renderCommonMenuStats();
   renderRestoredModals();
   renderActionCenterUpgrade();
+  updateMobileHeaderMode();
 }
 
 function syncAuthUi() {
