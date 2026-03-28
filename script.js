@@ -4284,6 +4284,15 @@ function renderUploadedBooksPage() {
     return;
   }
 
+  const filterPanel = document.querySelector(".uploaded-books-filters");
+  if (
+    filterPanel instanceof HTMLElement
+    && root.parentElement === filterPanel.parentElement
+    && filterPanel.nextElementSibling !== root
+  ) {
+    root.parentElement?.insertBefore(filterPanel, root);
+  }
+
   const filteredBooks = filterBooks({
     ...getUploadedBooksFilterValues(filterForm),
     sortBy: "newest"

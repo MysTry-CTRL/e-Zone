@@ -16,6 +16,12 @@ A playful futuristic ebook platform (Bangla + English) powered by **Firebase Aut
 - Increased global card/cell spacing variables again to remove tight/broken-looking sections.
 - Added extra footer hover safeguards to prevent jittery hover effects.
 
+### Hover + Filter Fix 🔥 (2026-03-28)
+- Removed footer elements from global hover-lift rules that were causing broken hover animations.
+- Added a hard footer stability rule so footer columns do not jump on hover.
+- Moved the main `books.html` Search/Filter section above category shelves.
+- Added a JS “self-heal” step so uploaded-books filter/search panel stays above the uploaded list even after markup edits.
+
 ### UI / Layout 🎨
 - Fixed inconsistent spacing between cards/cells so sections look cleaner and less cramped.
 - Added stronger shared spacing rules for category grids, discovery lists, and upload lists.
