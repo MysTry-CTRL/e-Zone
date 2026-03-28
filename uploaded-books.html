@@ -157,9 +157,47 @@
           <div class="section-header">
             <div>
               <h2>Uploaded Library</h2>
-              <p>Books are ordered by latest upload first.</p>
+              <p>Search and filter first, then review books ordered by latest upload first.</p>
             </div>
           </div>
+          <article class="form-card discovery-panel uploaded-books-filters">
+            <form id="uploaded-books-filter-form" class="discovery-grid" novalidate>
+              <div class="field">
+                <label for="uploaded-filter-query">Search</label>
+                <input class="input" id="uploaded-filter-query" name="query" type="search" placeholder="Title, author, description...">
+              </div>
+              <div class="field">
+                <label for="uploaded-filter-category">Category</label>
+                <select class="select" id="uploaded-filter-category" name="category">
+                  <option value="all">All categories</option>
+                  <option value="Love and Romance">Love and Romance</option>
+                  <option value="Fiction">Fiction</option>
+                  <option value="Biography">Biography</option>
+                  <option value="Science and Tech">Science and Tech</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="uploaded-filter-language">Language</label>
+                <select class="select" id="uploaded-filter-language" name="lang">
+                  <option value="all">All languages</option>
+                  <option value="Bangla">Bangla</option>
+                  <option value="English">English</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="uploaded-filter-featured">Featured</label>
+                <select class="select" id="uploaded-filter-featured" name="featured">
+                  <option value="all">All</option>
+                  <option value="featured">Featured only</option>
+                  <option value="not_featured">Non-featured only</option>
+                </select>
+              </div>
+              <div class="actions">
+                <button class="btn btn-ghost" type="button" data-uploaded-books-filter-reset>Reset Filters</button>
+              </div>
+            </form>
+            <p id="uploaded-books-summary" class="info-text">Loading books...</p>
+          </article>
           <div id="uploaded-books-list" class="cards-grid"></div>
         </section>
       </section>

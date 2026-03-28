@@ -727,6 +727,71 @@ h6,
   row-gap: 0.45rem;
 }
 
+[data-theme-pill-host]:empty,
+[data-notification-host]:empty {
+  display: none;
+}
+
+.notif-btn {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.24rem 0.44rem 0.24rem 0.3rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.notif-btn:hover,
+.notif-btn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-pop);
+}
+
+.notif-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.notif-label {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.notif-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.34rem;
+  border-radius: 999px;
+  border: 1px solid var(--pill-primary-border);
+  background: var(--pill-primary-bg);
+  color: var(--ink);
+  font-size: 0.67rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.notif-badge.is-error {
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
+  background: color-mix(in srgb, var(--danger) 22%, var(--surface-strong));
+  color: color-mix(in srgb, var(--danger) 88%, var(--ink));
+}
+
 .mobile-brand-toggle {
   display: none;
   border: 0;
@@ -836,6 +901,14 @@ h6,
   color: var(--ink);
   text-decoration: none;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.22s ease;
+}
+
+.mobile-nav-action-link {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
 }
 
 .mobile-nav-link span {
@@ -1242,6 +1315,31 @@ body.lock-phone-landscape {
 
 .category-block {
   margin-top: 1.35rem;
+}
+
+#home-category-sections,
+#books-category-sections {
+  display: grid;
+  gap: clamp(0.9rem, 1.6vw, 1.15rem);
+}
+
+main .section .cards-grid + .cards-grid,
+main .section .cards-grid + .soft-panel,
+main .section .soft-panel + .cards-grid,
+main .section .form-card + .cards-grid {
+  margin-top: var(--layout-gap);
+}
+
+.uploaded-books-filters {
+  margin-bottom: var(--layout-gap-tight);
+}
+
+#admin-upload-list.cards-grid,
+#uploaded-books-list.cards-grid,
+#books-discovery-results.cards-grid,
+#home-category-sections .cards-grid,
+#books-category-sections .cards-grid {
+  gap: max(var(--layout-gap), 0.95rem);
 }
 
 .category-title {
@@ -1965,6 +2063,13 @@ body.lock-phone-landscape {
   gap: 0.55rem 0.8rem;
 }
 
+.site-footer .footer-links a {
+  --link-hover-lift: 0px;
+  --link-hover-scale: 1;
+  --link-hover-shadow: none;
+  --link-hover-filter: none;
+}
+
 .footer-links a:not(.footer-social-link) {
   color: var(--ink-soft);
   text-decoration: none;
@@ -2559,6 +2664,7 @@ body.lock-phone-landscape {
 
 .mobile-inline-notice-message {
   margin: 0;
+  white-space: pre-line;
 }
 
 @keyframes hoverHelpBarPulse {
@@ -2890,6 +2996,19 @@ body.admin-mode [data-admin-only].show {
 .modal-content.modal-dashboard-users {
   width: min(860px, 95%);
   gap: 14px;
+}
+
+.modal-content.modal-owner-updates {
+  width: min(700px, 94%);
+}
+
+.owner-updates-log {
+  max-height: 360px;
+}
+
+#owner-update-list {
+  max-height: 280px;
+  margin-top: 0.75rem;
 }
 
 .dashboard-action-card {
@@ -3865,6 +3984,14 @@ body.reduce-motion .scroll-animate-ready.in-view {
   }
 
   .theme-toggle-pill {
+    padding-right: 0.32rem;
+  }
+
+  .notif-label {
+    display: none;
+  }
+
+  .notif-btn {
     padding-right: 0.32rem;
   }
 

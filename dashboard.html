@@ -191,6 +191,30 @@
           <h3>Global Activity Feed</h3>
           <div class="menu-log" id="dash-global-activity"></div>
         </article>
+
+        <article class="soft-panel">
+          <div class="section-header" style="margin-bottom:0.7rem;">
+            <div>
+              <h3 style="margin:0;">Owner Updates</h3>
+              <p class="info-text">Publish announcements for the notification button and keep users informed.</p>
+            </div>
+          </div>
+          <form id="owner-update-form" class="discovery-panel" novalidate>
+            <div class="field">
+              <label for="owner-update-title">Update Title</label>
+              <input class="input" id="owner-update-title" name="title" type="text" maxlength="90" placeholder="Example: New Books Added">
+            </div>
+            <div class="field">
+              <label for="owner-update-message">Update Message</label>
+              <textarea class="textarea" id="owner-update-message" name="message" rows="4" maxlength="1200" placeholder="Share your latest update..." required></textarea>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" type="submit">Publish Update</button>
+            </div>
+            <p class="status" id="owner-update-status" aria-live="polite"></p>
+          </form>
+          <div class="menu-log" id="owner-update-list"></div>
+        </article>
       </section>
     </section>
   </main>

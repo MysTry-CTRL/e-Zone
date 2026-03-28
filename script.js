@@ -84,6 +84,9 @@ const state = {
   feedback: [],
   feedbackLoaded: false,
   feedbackError: "",
+  ownerUpdates: [],
+  ownerUpdatesLoaded: false,
+  ownerUpdatesError: "",
   uiPreferences: null,
   dashboardUserFilter: "all"
 };
@@ -397,6 +400,16 @@ function buildGlobalModalMarkup() {
       </div>
     </div>
 
+    <div class="modal" data-modal-root="owner-updates" aria-hidden="true">
+      <div class="modal-content modal-owner-updates glass" role="dialog" aria-modal="true" aria-labelledby="owner-updates-title">
+        <button class="modal-close" type="button" data-modal-close="owner-updates" aria-label="Close owner updates modal">&times;</button>
+        <p class="section-label">Notifications</p>
+        <h3 id="owner-updates-title">Recent Owner Updates</h3>
+        <p class="info-text">Latest announcements published by the owner from the dashboard.</p>
+        <div class="menu-log owner-updates-log" data-owner-updates-log></div>
+      </div>
+    </div>
+
     <div class="modal" data-modal-root="popup" aria-hidden="true">
       <div class="modal-content modal-popup glass" data-kind="info" role="dialog" aria-modal="true" aria-labelledby="popup-modal-title">
         <button class="modal-close" type="button" data-modal-close="popup" aria-label="Close popup modal">&times;</button>
@@ -629,6 +642,14 @@ function initMobileBrandMenu() {
 
     if (target.closest("[data-mobile-nav-link]")) {
       closeMobileBrandMenu();
+      return;
+    }
+
+    const actionButton = target.closest("[data-mobile-nav-action]");
+    if (actionButton instanceof HTMLElement) {
+      event.preventDefault();
+      handleMobileNavAction(String(actionButton.getAttribute("data-mobile-nav-action") || ""));
+      closeMobileBrandMenu();
     }
   });
 
@@ -765,11 +786,20 @@ function renderMobileBrandMenu() {
 
   linksRoot.innerHTML = links.length
     ? links.map((item) => {
-      const targetFile = getFileNameFromHref(item.href);
+      if (item.kind === "action") {
+        return `
+          <button class="mobile-nav-link mobile-nav-action-link" type="button" data-mobile-nav-action="${escapeHtml(item.action || "")}">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(item.note)}</span>
+          </button>
+        `;
+      }
+
+      const targetFile = getFileNameFromHref(item.href || "");
       const isCurrent = targetFile === currentFile;
 
       return `
-        <a class="mobile-nav-link${isCurrent ? " is-current" : ""}" href="${escapeHtml(item.href)}" data-mobile-nav-link>
+        <a class="mobile-nav-link${isCurrent ? " is-current" : ""}" href="${escapeHtml(item.href || "#")}" data-mobile-nav-link>
           <strong>${escapeHtml(item.label)}</strong>
           <span>${escapeHtml(isCurrent ? "Current page" : item.note)}</span>
         </a>
@@ -783,6 +813,7 @@ function renderMobileBrandMenu() {
 }
 
 function getMobileBrandMenuLinks() {
+  const isLoggedIn = Boolean(state.currentUser);
   const anchors = [
     ...Array.from(document.querySelectorAll(".main-nav a")),
     ...Array.from(document.querySelectorAll(".control-center a")).filter((link) => {
@@ -791,31 +822,86 @@ function getMobileBrandMenuLinks() {
   ];
   const seen = new Set();
 
-  return anchors.reduce((items, link) => {
+  const items = anchors.reduce((result, link) => {
     if (!(link instanceof HTMLAnchorElement)) {
-      return items;
+      return result;
     }
 
     const href = String(link.getAttribute("href") || "").trim();
     const label = String(link.textContent || "").trim();
 
     if (!href || !label) {
-      return items;
+      return result;
     }
 
     const key = `${getFileNameFromHref(href)}::${label.toLowerCase()}`;
     if (seen.has(key)) {
-      return items;
+      return result;
     }
 
     seen.add(key);
-    items.push({
+    result.push({
       href,
       label,
+      kind: "link",
       note: getMobileBrandMenuLinkNote(label)
     });
-    return items;
+    return result;
   }, []);
+
+  if (!isLoggedIn) {
+    const fallbackAuthLinks = [
+      { href: "login.html", label: "Login" },
+      { href: "signup.html", label: "Sign Up" }
+    ];
+
+    fallbackAuthLinks.forEach((item) => {
+      const key = `${getFileNameFromHref(item.href)}::${item.label.toLowerCase()}`;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      items.push({
+        ...item,
+        kind: "link",
+        note: getMobileBrandMenuLinkNote(item.label)
+      });
+    });
+    items.push({
+      kind: "action",
+      action: "notifications",
+      label: "Notifications",
+      note: state.ownerUpdatesLoaded
+        ? `${state.ownerUpdates.length} recent owner updates`
+        : "Loading owner updates..."
+    });
+    return items;
+  }
+
+  const actionItems = [
+    {
+      kind: "action",
+      action: "account",
+      label: "My Account",
+      note: "Open Action Center and account controls."
+    },
+    {
+      kind: "action",
+      action: "theme",
+      label: "Theme Toggle",
+      note: `Switch to ${getResolvedThemeMode() === "dark" ? "light" : "dark"} mode.`
+    },
+    {
+      kind: "action",
+      action: "notifications",
+      label: "Notifications",
+      note: state.ownerUpdatesLoaded
+        ? `${state.ownerUpdates.length} recent owner updates`
+        : "Loading owner updates..."
+    }
+  ];
+
+  return [...items, ...actionItems];
 }
 
 function getMobileBrandMenuLinkNote(label) {
@@ -845,7 +931,52 @@ function getMobileBrandMenuLinkNote(label) {
     return "Create a new account.";
   }
 
+  if (normalized === "my account") {
+    return "Open your account control center.";
+  }
+
+  if (normalized === "theme toggle") {
+    return "Switch between light and dark mode.";
+  }
+
+  if (normalized === "notifications") {
+    return "Read the latest owner announcements.";
+  }
+
   return `Open ${label}.`;
+}
+
+function handleMobileNavAction(action = "") {
+  const key = String(action || "").trim().toLowerCase();
+
+  if (key === "account") {
+    const trigger = document.querySelector("[data-user-menu-trigger]");
+    if (trigger instanceof HTMLButtonElement && !trigger.classList.contains("hidden")) {
+      trigger.click();
+    } else {
+      showMobileInlineNotice({
+        label: "Login Required",
+        message: "Please login first to open your account center."
+      });
+    }
+    return;
+  }
+
+  if (key === "theme") {
+    if (!state.currentUser) {
+      showMobileInlineNotice({
+        label: "Login Required",
+        message: "Theme switching becomes available after login."
+      });
+      return;
+    }
+    cycleActionCenterTheme();
+    return;
+  }
+
+  if (key === "notifications") {
+    openModal("owner-updates");
+  }
 }
 
 function toggleMobileBrandMenu() {
@@ -1077,6 +1208,7 @@ function initCustomModals() {
 function renderRestoredModals() {
   updateProfileCustomizeModal();
   renderDashboardUsersModal();
+  renderOwnerUpdatesModal();
 }
 
 function updateProfileCustomizeModal() {
@@ -1300,6 +1432,40 @@ function renderDashboardUsersModal() {
     : "<div class='menu-log-item'><span>No users yet</span>Registered users will appear here once Firestore sync completes.</div>";
 }
 
+function renderOwnerUpdatesModal() {
+  const modal = document.querySelector("[data-modal-root='owner-updates']");
+  if (!(modal instanceof HTMLElement)) {
+    return;
+  }
+
+  const logNode = modal.querySelector("[data-owner-updates-log]");
+  if (!(logNode instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!state.ownerUpdatesLoaded) {
+    logNode.innerHTML = "<div class='menu-log-item'><span>Loading updates...</span>Syncing owner announcements from Firestore.</div>";
+    return;
+  }
+
+  if (state.ownerUpdatesError) {
+    logNode.innerHTML = `<div class='menu-log-item'><span>Updates unavailable</span>${escapeHtml(state.ownerUpdatesError)}</div>`;
+    return;
+  }
+
+  const updates = state.ownerUpdates.slice(0, 20);
+
+  logNode.innerHTML = updates.length
+    ? updates.map((item) => `
+        <div class="menu-log-item">
+          <span>${escapeHtml(item.title || "Owner Update")}</span>
+          <p class="feedback-content">${escapeHtml(item.message || "")}</p>
+          <small>${escapeHtml(item.ownerName || "Owner")} - ${formatDateTime(item.createdAt)}</small>
+        </div>
+      `).join("")
+    : "<div class='menu-log-item'><span>No updates yet</span>Owner announcements will appear here as soon as they are posted.</div>";
+}
+
 function openModal(name) {
   const modal = document.querySelector(`[data-modal-root="${name}"]`);
   if (!(modal instanceof HTMLElement)) {
@@ -1314,6 +1480,20 @@ function openModal(name) {
 
     if (name === "dashboard-users") {
       window.location.href = isOwnerUser() ? "logs.html" : "login.html";
+      return;
+    }
+
+    if (name === "owner-updates") {
+      const previewLines = state.ownerUpdates.slice(0, 4).map((item, index) => {
+        const title = item.title || `Update ${index + 1}`;
+        return `${index + 1}. ${title} - ${truncateText(item.message || "", 70)}`;
+      });
+      showMobileInlineNotice({
+        label: "Owner Updates",
+        message: previewLines.length
+          ? previewLines.join("\n")
+          : "No owner updates are available yet."
+      });
       return;
     }
 
@@ -1715,6 +1895,7 @@ async function initApp() {
   bindFeedbackPage();
   bindAdminPage();
   bindDashboardShortcuts();
+  bindOwnerUpdateForm();
 
   renderAllPages();
 
@@ -1726,6 +1907,7 @@ async function initApp() {
   }
 
   void loadBooks();
+  void loadOwnerUpdates();
   await handleSocialRedirectResult();
 
   onAuthStateChanged(auth, async (user) => {
@@ -1737,7 +1919,7 @@ async function initApp() {
       if (user) {
         console.info("[e-Zone] Authenticated user detected:", user.email || user.uid);
         state.currentProfile = await syncCurrentUserProfile(user);
-        await Promise.all([loadUsers(), loadFeedback()]);
+        await Promise.all([loadUsers(), loadFeedback(), loadOwnerUpdates()]);
       } else {
         console.info("[e-Zone] No authenticated user");
         state.users = [];
@@ -1746,6 +1928,7 @@ async function initApp() {
         state.feedback = [];
         state.feedbackLoaded = false;
         state.feedbackError = "";
+        await loadOwnerUpdates();
       }
     } catch (error) {
       console.error("[e-Zone] Auth bootstrap failed", error);
@@ -2131,10 +2314,10 @@ function bindGlobalActions() {
       return;
     }
 
-    const customizeButton = target.closest('[data-open-modal="profile-customize"]');
-    if (customizeButton) {
+    const modalTrigger = target.closest("[data-open-modal]");
+    if (modalTrigger instanceof HTMLElement) {
       event.preventDefault();
-      openModal("profile-customize");
+      openModal(String(modalTrigger.getAttribute("data-open-modal") || ""));
     }
   });
 }
@@ -2631,6 +2814,56 @@ function bindDashboardShortcuts() {
   });
 }
 
+function bindOwnerUpdateForm() {
+  const form = document.getElementById("owner-update-form");
+  if (!(form instanceof HTMLFormElement) || form.dataset.bound === "1") {
+    return;
+  }
+
+  form.dataset.bound = "1";
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const status = document.getElementById("owner-update-status");
+
+    if (!isFirebaseConfigured()) {
+      setStatus(status, "Update firebase.js before publishing updates.", true);
+      return;
+    }
+
+    if (!state.currentUser || !isOwnerUser()) {
+      setStatus(status, "Only the owner account can publish updates.", true);
+      return;
+    }
+
+    const formData = new FormData(form);
+    const title = String(formData.get("title") || "").trim();
+    const message = String(formData.get("message") || "").trim();
+
+    if (!message) {
+      setStatus(status, "Please write an update message first.", true);
+      return;
+    }
+
+    setStatus(status, "Publishing update...", false);
+
+    try {
+      await submitOwnerUpdateEntry({
+        title,
+        message
+      });
+      form.reset();
+      await loadOwnerUpdates();
+      renderAllPages();
+      setStatus(status, "Update published and synced to notifications.", false);
+    } catch (error) {
+      console.error("[e-Zone] Could not publish owner update", error);
+      setStatus(status, "Could not publish update right now.", true);
+    }
+  });
+}
+
 async function ensureUserProfileDocument(user, preferredName = "") {
   const userRef = doc(db, "users", user.uid);
   const adminRef = doc(db, "admins", user.uid);
@@ -2784,6 +3017,32 @@ async function loadFeedback() {
   return state.feedback;
 }
 
+async function loadOwnerUpdates() {
+  if (!isFirebaseConfigured()) {
+    state.ownerUpdates = [];
+    state.ownerUpdatesLoaded = false;
+    state.ownerUpdatesError = "";
+    return [];
+  }
+
+  console.info("[e-Zone] Fetching owner updates from Firestore");
+
+  try {
+    const snapshot = await getDocs(collection(db, "ownerUpdates"));
+    state.ownerUpdates = snapshot.docs.map(mapOwnerUpdateDocument).sort(sortByNewest);
+    state.ownerUpdatesError = "";
+  } catch (error) {
+    console.error("[e-Zone] Could not fetch owner updates", error);
+    state.ownerUpdates = [];
+    state.ownerUpdatesError = "Could not load owner updates from Firestore.";
+  } finally {
+    state.ownerUpdatesLoaded = true;
+    renderAllPages();
+  }
+
+  return state.ownerUpdates;
+}
+
 async function submitFeedbackEntry({ message, source }) {
   if (!state.currentUser) {
     throw new Error("A logged-in user is required.");
@@ -2795,6 +3054,23 @@ async function submitFeedbackEntry({ message, source }) {
     userId: state.currentUser.uid,
     source: String(source || "feedback"),
     timestamp: serverTimestamp()
+  });
+}
+
+async function submitOwnerUpdateEntry({ title, message }) {
+  if (!state.currentUser || !isOwnerUser()) {
+    throw new Error("Only the owner account can publish updates.");
+  }
+
+  const ownerName = String(state.currentProfile?.name || OWNER_ACCOUNT.fullName || "Owner").trim();
+
+  await addDoc(collection(db, "ownerUpdates"), {
+    title: String(title || "").trim() || "Owner Update",
+    message: String(message || "").trim(),
+    ownerName,
+    ownerEmail: state.currentUser.email || OWNER_ACCOUNT.email,
+    createdAt: serverTimestamp(),
+    createdBy: state.currentUser.uid
   });
 }
 
@@ -2847,6 +3123,7 @@ function initActionCenterUpgrade() {
 
 function renderActionCenterUpgrade() {
   ensureActionCenterUpgradeMarkup();
+  renderOwnerNotificationsButton();
   renderActionCenterThemePill();
   renderActionCenterSection();
 }
@@ -2855,6 +3132,18 @@ function ensureActionCenterUpgradeMarkup() {
   document.querySelectorAll(".control-center").forEach((root) => {
     if (!(root instanceof HTMLElement)) {
       return;
+    }
+
+    let notificationHost = root.querySelector("[data-notification-host]");
+    if (!(notificationHost instanceof HTMLElement)) {
+      notificationHost = document.createElement("div");
+      notificationHost.setAttribute("data-notification-host", "");
+      const loginLink = root.querySelector('[data-auth-link="login"]');
+      if (loginLink) {
+        root.insertBefore(notificationHost, loginLink);
+      } else {
+        root.insertBefore(notificationHost, root.firstChild);
+      }
     }
 
     let host = root.querySelector("[data-theme-pill-host]");
@@ -2888,7 +3177,51 @@ function ensureActionCenterUpgradeMarkup() {
   });
 }
 
+function renderOwnerNotificationsButton() {
+  const updatesCount = state.ownerUpdatesLoaded ? state.ownerUpdates.length : 0;
+  const badgeText = updatesCount > 99 ? "99+" : String(updatesCount);
+  const hint = state.ownerUpdatesError
+    ? "Owner updates are temporarily unavailable."
+    : state.ownerUpdatesLoaded
+      ? `${updatesCount} owner update${updatesCount === 1 ? "" : "s"} available`
+      : "Loading owner updates...";
+
+  document.querySelectorAll("[data-notification-host]").forEach((host) => {
+    if (!(host instanceof HTMLElement)) {
+      return;
+    }
+
+    host.innerHTML = `
+      <button
+        class="notif-btn"
+        type="button"
+        data-open-modal="owner-updates"
+        aria-label="Open owner updates notifications"
+        title="${escapeHtml(hint)}"
+      >
+        <span class="notif-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"></path>
+            <path d="M9.8 17a2.2 2.2 0 0 0 4.4 0"></path>
+          </svg>
+        </span>
+        <span class="notif-label">Updates</span>
+        <span class="notif-badge${state.ownerUpdatesError ? " is-error" : ""}" data-owner-update-count>${escapeHtml(state.ownerUpdatesLoaded ? badgeText : "...")}</span>
+      </button>
+    `;
+  });
+}
+
 function renderActionCenterThemePill() {
+  if (!state.currentUser) {
+    document.querySelectorAll("[data-theme-pill-host]").forEach((host) => {
+      if (host instanceof HTMLElement) {
+        host.innerHTML = "";
+      }
+    });
+    return;
+  }
+
   const resolvedTheme = getResolvedThemeMode();
   const label = capitalizeLabel(resolvedTheme);
   const nextLabel = resolvedTheme === "dark" ? "Light" : "Dark";
@@ -3181,6 +3514,16 @@ function getResolvedThemeMode() {
 }
 
 function cycleActionCenterTheme() {
+  if (!state.currentUser) {
+    showPopupModal({
+      kind: "warning",
+      label: "Login Required",
+      title: "Theme Toggle Locked",
+      message: "Theme switching is available only after login or signup."
+    });
+    return;
+  }
+
   const current = getResolvedThemeMode();
   const next = current === "dark" ? "light" : "dark";
 
@@ -3757,6 +4100,25 @@ function renderDashboardPage() {
         `).join("")
       : "<div class='menu-log-item'><span>No activity yet</span>Book uploads and feedback will appear here.</div>";
   }
+
+  const updatesRoot = document.getElementById("owner-update-list");
+  if (updatesRoot) {
+    if (!state.ownerUpdatesLoaded) {
+      updatesRoot.innerHTML = "<div class='menu-log-item'><span>Loading updates...</span>Waiting for Firestore sync.</div>";
+    } else if (state.ownerUpdatesError) {
+      updatesRoot.innerHTML = `<div class='menu-log-item'><span>Updates unavailable</span>${escapeHtml(state.ownerUpdatesError)}</div>`;
+    } else if (!state.ownerUpdates.length) {
+      updatesRoot.innerHTML = "<div class='menu-log-item'><span>No updates yet</span>Use the publish form above to post update announcements.</div>";
+    } else {
+      updatesRoot.innerHTML = state.ownerUpdates.slice(0, 12).map((item) => `
+        <div class="menu-log-item">
+          <span>${escapeHtml(item.title || "Owner Update")}</span>
+          <p class="feedback-content">${escapeHtml(item.message || "")}</p>
+          <small>${escapeHtml(item.ownerName || "Owner")} - ${formatDateTime(item.createdAt)}</small>
+        </div>
+      `).join("");
+    }
+  }
 }
 
 function renderUserDashboardPage() {
@@ -3899,16 +4261,65 @@ function renderUploadedBooksPage() {
   setText("uploaded-books-total", String(state.books.length));
   setText("uploaded-books-featured", String(state.books.filter((book) => book.featured).length));
 
+  const filterForm = document.getElementById("uploaded-books-filter-form");
+  if (filterForm instanceof HTMLFormElement && filterForm.dataset.bound !== "1") {
+    filterForm.dataset.bound = "1";
+    const rerender = () => {
+      renderUploadedBooksPage();
+    };
+    filterForm.addEventListener("input", rerender);
+    filterForm.addEventListener("change", rerender);
+
+    const resetButton = filterForm.querySelector("[data-uploaded-books-filter-reset]");
+    if (resetButton instanceof HTMLButtonElement) {
+      resetButton.addEventListener("click", () => {
+        filterForm.reset();
+        rerender();
+      });
+    }
+  }
+
   const root = document.getElementById("uploaded-books-list");
   if (!root) {
     return;
   }
 
-  root.innerHTML = state.books.length
-    ? state.books.map((book) => renderBookCard(book, { showMeta: true })).join("")
-    : "<article class='ebook-card placeholder-cell'><p>No books are stored in Firestore yet.</p></article>";
+  const filteredBooks = filterBooks({
+    ...getUploadedBooksFilterValues(filterForm),
+    sortBy: "newest"
+  });
+
+  const summaryNode = document.getElementById("uploaded-books-summary");
+  if (summaryNode instanceof HTMLElement) {
+    summaryNode.textContent = `${filteredBooks.length} result${filteredBooks.length === 1 ? "" : "s"} shown`;
+  }
+
+  root.innerHTML = filteredBooks.length
+    ? filteredBooks.map((book) => renderBookCard(book, { showMeta: true })).join("")
+    : state.books.length
+      ? "<article class='ebook-card placeholder-cell'><p>No books match the current filters.</p></article>"
+      : "<article class='ebook-card placeholder-cell'><p>No books are stored in Firestore yet.</p></article>";
 
   hydrateCovers(root);
+}
+
+function getUploadedBooksFilterValues(form) {
+  if (!(form instanceof HTMLFormElement)) {
+    return {
+      query: "",
+      category: "all",
+      lang: "all",
+      featured: "all"
+    };
+  }
+
+  const formData = new FormData(form);
+  return {
+    query: String(formData.get("query") || "").trim(),
+    category: String(formData.get("category") || "all"),
+    lang: String(formData.get("lang") || "all"),
+    featured: String(formData.get("featured") || "all")
+  };
 }
 
 function renderPurchaseLinksPage() {
@@ -4056,7 +4467,8 @@ function renderConfigurationWarnings() {
     "book-detail-root",
     "feedback-app",
     "admin-upload-list",
-    "uploaded-books-list"
+    "uploaded-books-list",
+    "owner-update-list"
   ].forEach((id) => {
     const element = document.getElementById(id);
     if (element) {
@@ -4073,6 +4485,9 @@ function renderConfigurationWarnings() {
   if (results) {
     results.innerHTML = noticeMarkup(message);
   }
+
+  setText("uploaded-books-summary", message);
+  setText("owner-update-status", message);
 }
 
 function toggleProtectedPanel(panelId, guardId, options = {}) {
@@ -4247,6 +4662,18 @@ function mapFeedbackDocument(snapshot) {
   };
 }
 
+function mapOwnerUpdateDocument(snapshot) {
+  const data = snapshot.data() || {};
+  return {
+    id: snapshot.id,
+    title: String(data.title || "Owner Update"),
+    message: String(data.message || ""),
+    ownerName: String(data.ownerName || OWNER_ACCOUNT.fullName || "Owner"),
+    ownerEmail: String(data.ownerEmail || ""),
+    createdAt: safeDate(data.createdAt) || new Date()
+  };
+}
+
 function mapUserFromCurrentSession() {
   if (!state.currentUser) {
     return null;
@@ -4275,7 +4702,13 @@ function buildActivityItems() {
     time: book.createdAt
   }));
 
-  return [...feedbackItems, ...bookItems].sort((left, right) => {
+  const updateItems = state.ownerUpdates.map((item) => ({
+    title: `Owner Update - ${item.title || "Announcement"}`,
+    detail: truncateText(item.message, 100),
+    time: item.createdAt
+  }));
+
+  return [...feedbackItems, ...bookItems, ...updateItems].sort((left, right) => {
     return getTimeValue(right.time) - getTimeValue(left.time);
   });
 }
