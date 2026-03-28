@@ -3344,7 +3344,35 @@ function renderActionCenterSection() {
 function buildActionCenterSectionMarkup() {
   return `
     <section class="user-menu-section action-center-upgrade" data-action-center-upgrade>
-      <h4>Action Center</h4>
+      <div class="action-center-head">
+        <div>
+          <h4>Action Center</h4>
+          <p class="control-center-note" data-action-center-note>Quick links and live status will appear here.</p>
+        </div>
+        <span class="action-center-chip" data-action-center-session>Guest</span>
+      </div>
+      <div class="action-center-identity">
+        <span class="profile-avatar action-center-avatar" data-action-center-avatar>EZ</span>
+        <div class="action-center-identity-copy">
+          <strong data-action-center-role>Guest Access</strong>
+          <span data-action-center-meta>Guest User</span>
+        </div>
+      </div>
+      <div class="action-center-grid" data-action-center-links></div>
+      <div class="action-center-stats">
+        <article class="action-center-mini-stat">
+          <span>Current Page</span>
+          <strong data-action-center-page>Home</strong>
+        </article>
+        <article class="action-center-mini-stat">
+          <span>Library</span>
+          <strong data-action-center-books>--</strong>
+        </article>
+        <article class="action-center-mini-stat">
+          <span data-action-center-feedback-label>Access</span>
+          <strong data-action-center-feedback>Locked</strong>
+        </article>
+      </div>
       <div class="menu-log action-center-log" data-action-center-log></div>
     </section>
   `;
@@ -3632,8 +3660,7 @@ function syncAuthUi() {
       return;
     }
 
-    section.style.display = "none";
-    section.innerHTML = "";
+    section.style.display = isOwner ? "grid" : "none";
   });
 
   if (!isLoggedIn) {

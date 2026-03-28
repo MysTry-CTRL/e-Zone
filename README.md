@@ -22,14 +22,6 @@ A playful futuristic ebook platform (Bangla + English) powered by **Firebase Aut
 - Moved the main `books.html` Search/Filter section above category shelves.
 - Added a JS “self-heal” step so uploaded-books filter/search panel stays above the uploaded list even after markup edits.
 
-### Action Center Cleanup 🧹 (2026-03-28)
-- Removed the **upper part** of Action Center and kept the lower log block.
-- Removed the old control-center admin mini-block content:
-  - `Total User Visits`
-  - `Total Purchases`
-  - `Total Uploads`
-  - `Global Activity Timeline`
-
 ### UI / Layout 🎨
 - Fixed inconsistent spacing between cards/cells so sections look cleaner and less cramped.
 - Added stronger shared spacing rules for category grids, discovery lists, and upload lists.
