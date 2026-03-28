@@ -9,6 +9,13 @@ A playful futuristic ebook platform (Bangla + English) powered by **Firebase Aut
 - Responsive UI for mobile, tablet, laptop, and desktop
 
 ## Latest Update Log ✅ (2026-03-27)
+### Follow-up Hotfix 🔧 (2026-03-28)
+- Mobile compact header now keeps controls visible:
+  - Logged-in users see account/action controls + theme toggle.
+  - Guests see Login / Sign Up controls.
+- Increased global card/cell spacing variables again to remove tight/broken-looking sections.
+- Added extra footer hover safeguards to prevent jittery hover effects.
+
 ### UI / Layout 🎨
 - Fixed inconsistent spacing between cards/cells so sections look cleaner and less cramped.
 - Added stronger shared spacing rules for category grids, discovery lists, and upload lists.

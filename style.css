@@ -35,9 +35,9 @@
   --space-md: 1rem;
   --space-lg: 1.35rem;
   --space-xl: 1.9rem;
-  --layout-gap-tight: clamp(0.72rem, 1.3vw, 0.9rem);
-  --layout-gap: clamp(0.88rem, 1.8vw, 1.08rem);
-  --layout-gap-loose: clamp(1rem, 2vw, 1.18rem);
+  --layout-gap-tight: clamp(0.8rem, 1.4vw, 0.96rem);
+  --layout-gap: clamp(0.96rem, 1.9vw, 1.16rem);
+  --layout-gap-loose: clamp(1.08rem, 2.1vw, 1.28rem);
   --shadow-soft: 0 14px 34px rgba(89, 103, 160, 0.16);
   --shadow-pop: 0 18px 38px rgba(80, 96, 151, 0.26);
   --loader-bg-start: rgba(237, 242, 255, 0.96);
@@ -2118,6 +2118,8 @@ main .section .form-card + .cards-grid {
   color: var(--primary);
   transform: translateY(-1px);
   text-shadow: 0 0 12px color-mix(in srgb, var(--primary) 24%, transparent);
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 .footer-links a:not(.footer-social-link):hover::before,
@@ -2209,6 +2211,7 @@ main .section .form-card + .cards-grid {
   transform: translateY(-2px);
   box-shadow: var(--shadow-pop);
   border-color: var(--line-strong);
+  filter: none !important;
 }
 
 .footer-social-link:hover::after,
@@ -4116,9 +4119,10 @@ body.reduce-motion .scroll-animate-ready.in-view {
 }
 
 body.use-compact-header .nav-shell {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.58rem;
-  min-height: 68px;
+  row-gap: 0.42rem;
+  min-height: 72px;
   padding: 0.76rem 0;
 }
 
@@ -4146,9 +4150,27 @@ body.use-compact-header .site-title {
   white-space: nowrap;
 }
 
-body.use-compact-header .main-nav,
-body.use-compact-header .control-center {
+body.use-compact-header .main-nav {
   display: none !important;
+}
+
+body.use-compact-header .control-center {
+  display: inline-flex !important;
+  width: 100%;
+  margin-left: 0;
+  justify-content: flex-end;
+  gap: 0.34rem;
+  row-gap: 0.34rem;
+}
+
+body.use-compact-header .profile-trigger {
+  max-width: 100%;
+}
+
+body.use-compact-header .btn,
+body.use-compact-header .theme-toggle-pill,
+body.use-compact-header .notif-btn {
+  min-height: 40px;
 }
 
 @media (max-width: 1024px) and (min-width: 761px) {
