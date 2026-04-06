@@ -132,7 +132,7 @@ body {
   display: flex;
   flex-direction: column;
   color: var(--ink);
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   background: linear-gradient(140deg, var(--bg-1), var(--bg-2) 45%, var(--bg-3));
   line-height: 1.55;
   overflow-x: hidden;
@@ -307,7 +307,7 @@ a {
   filter: none !important;
 }
 
-@media (hover: hover) and (pointer: fine) {
+@media (any-hover: hover) {
   :where(
     a[href],
     button,
@@ -371,7 +371,7 @@ h6,
 .section-label,
 .footer-title,
 .eyebrow {
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   letter-spacing: 0.02em;
 }
 
@@ -642,6 +642,7 @@ h6,
   margin-left: 0.2rem;
   cursor: pointer;
   box-shadow: var(--shadow-soft);
+  white-space: nowrap;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.22s ease;
 }
 
@@ -719,6 +720,28 @@ h6,
   gap: 0.45rem;
   margin-left: 0.4rem;
   row-gap: 0.45rem;
+}
+
+.control-center [data-notification-host] {
+  order: 10;
+}
+
+.control-center [data-theme-pill-host] {
+  order: 20;
+}
+
+.control-center [data-auth-link="login"] {
+  order: 30;
+}
+
+.control-center [data-auth-link="signup"] {
+  order: 31;
+}
+
+.control-center > .profile-trigger,
+.control-center [data-user-menu-trigger] {
+  order: 99;
+  margin-left: auto;
 }
 
 [data-theme-pill-host]:empty,
@@ -2409,7 +2432,7 @@ main .section .form-card + .cards-grid {
   border: 1px solid var(--line);
   background: var(--surface-muted);
   color: var(--ink);
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   cursor: pointer;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border 0.3s ease;
 }
@@ -2456,7 +2479,7 @@ main .section .form-card + .cards-grid {
 }
 
 .profile-name {
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   font-size: 0.95rem;
 }
 
@@ -2707,7 +2730,7 @@ main .section .form-card + .cards-grid {
 }
 
 .customize-section h4 {
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   font-size: 1rem;
 }
 
@@ -2916,7 +2939,7 @@ main .section .form-card + .cards-grid {
 }
 
 .user-menu-title {
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   font-size: 1.3rem;
 }
 
@@ -2933,7 +2956,7 @@ main .section .form-card + .cards-grid {
 }
 
 .user-menu-section h4 {
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   font-size: 1rem;
 }
 
@@ -3278,7 +3301,7 @@ body.admin-mode .role-badge {
 }
 
 .action-center-card strong {
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
   font-size: 1rem;
   letter-spacing: 0.02em;
 }
@@ -3461,7 +3484,7 @@ body.reduce-motion .scroll-animate-ready.in-view {
   border: 1px solid rgba(255, 255, 255, 0.45);
   font-size: 0.8rem;
   letter-spacing: 0.04em;
-  font-family: "Iceberg", "Segoe UI", sans-serif;
+  font-family: "Anta", "Segoe UI", sans-serif;
 }
 
 .robot-icon {
@@ -3984,7 +4007,8 @@ body.reduce-motion .scroll-animate-ready.in-view {
   }
 
   .theme-pill-label {
-    display: none;
+    display: inline-block;
+    min-width: 38px;
   }
 
   .theme-toggle-pill {
@@ -4236,3 +4260,4 @@ body.use-compact-header .notif-btn {
     width: 100%;
   }
 }
+

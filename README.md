@@ -9,6 +9,27 @@ A playful futuristic ebook platform (Bangla + English) powered by **Firebase Aut
 - Responsive UI for mobile, tablet, laptop, and desktop
 
 ## Latest Update Log ✅ (2026-03-27)
+### Global Font Switch 🔤 (2026-04-06)
+- Switched the full website font from **Iceberg** to **Anta** (Google Fonts).
+- Updated shared CSS font-family references globally.
+- Updated all page-level Google Fonts links to load `Anta`.
+
+### Action Center Position Fix 📌 (2026-04-06)
+- On all device sizes, the Action Center/Profile trigger is now forced to the **rightmost** side of topbar controls.
+- Control-center button order is now fixed so other controls stay to the left.
+
+### Theme Toggle Label Fix 🌗 (2026-04-06)
+- Theme toggle now always shows as a **pill switch + text beside it**.
+- Kept the label visible on smaller screens too (no hidden text beside the pill).
+
+### Hover Motion Fix 🖱️ (2026-04-06)
+- Updated hover-detection media rule to `any-hover` so hover animations trigger correctly on mixed-input devices (touch + mouse/trackpad).
+- This fixes cases where some hover effects looked static.
+
+### Virtual Scrollbar Restore ↔️ (2026-04-06)
+- Restored the horizontal virtual scroll indicator below the sticky topbar on all pages.
+- The indicator is now injected and updated from shared script logic, so it stays consistent after reloads and page navigation.
+
 ### Follow-up Hotfix 🔧 (2026-03-28)
 - Mobile compact header now keeps controls visible:
   - Logged-in users see account/action controls + theme toggle.

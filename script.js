@@ -94,6 +94,7 @@ const state = {
 let mobileNoticeTimer = 0;
 let hoverHelpTimer = 0;
 let activeLinkPreviewElement = null;
+let scrollIndicatorRaf = 0;
 
 function isOwnerEmail(email) {
   return normalizeEmail(email) === normalizeEmail(OWNER_ACCOUNT.email);
@@ -1878,6 +1879,7 @@ async function initApp() {
   console.info("[e-Zone] Initializing Firebase frontend");
 
   initPageLoader();
+  initScrollIndicator();
   initUserMenu();
   initFooterLinkEffects();
   initPasswordToggles();
@@ -1938,6 +1940,73 @@ async function initApp() {
     renderAllPages();
     hidePageLoader();
   });
+}
+
+function initScrollIndicator() {
+  ensureScrollIndicator();
+  updateScrollIndicatorProgress();
+
+  if (!(document.body instanceof HTMLElement) || document.body.dataset.scrollIndicatorBound === "1") {
+    return;
+  }
+
+  document.body.dataset.scrollIndicatorBound = "1";
+
+  const queueUpdate = () => {
+    if (scrollIndicatorRaf) {
+      return;
+    }
+
+    scrollIndicatorRaf = window.requestAnimationFrame(() => {
+      scrollIndicatorRaf = 0;
+      updateScrollIndicatorProgress();
+    });
+  };
+
+  window.addEventListener("scroll", queueUpdate, { passive: true });
+  window.addEventListener("resize", queueUpdate, { passive: true });
+  window.addEventListener("orientationchange", queueUpdate);
+  window.addEventListener("load", queueUpdate);
+}
+
+function ensureScrollIndicator() {
+  const header = document.querySelector(".site-header");
+  if (!(header instanceof HTMLElement)) {
+    return null;
+  }
+
+  let indicator = header.querySelector(".scroll-indicator");
+  if (!(indicator instanceof HTMLElement)) {
+    indicator = document.createElement("div");
+    indicator.className = "scroll-indicator";
+    indicator.setAttribute("data-scroll-indicator", "");
+    indicator.setAttribute("aria-hidden", "true");
+    indicator.innerHTML = "<span data-scroll-indicator-fill></span>";
+    header.append(indicator);
+  }
+
+  let fill = indicator.querySelector("[data-scroll-indicator-fill]");
+  if (!(fill instanceof HTMLElement)) {
+    fill = document.createElement("span");
+    fill.setAttribute("data-scroll-indicator-fill", "");
+    indicator.append(fill);
+  }
+
+  return fill;
+}
+
+function updateScrollIndicatorProgress() {
+  const fill = ensureScrollIndicator();
+  if (!(fill instanceof HTMLElement)) {
+    return;
+  }
+
+  const doc = document.documentElement;
+  const maxScrollable = Math.max(0, (doc.scrollHeight || 0) - window.innerHeight);
+  const current = Math.max(0, window.scrollY || doc.scrollTop || 0);
+  const percent = maxScrollable > 0 ? Math.min(100, (current / maxScrollable) * 100) : 0;
+
+  fill.style.width = `${percent.toFixed(2)}%`;
 }
 
 function initPageLoader() {
